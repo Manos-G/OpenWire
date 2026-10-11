@@ -2,6 +2,7 @@
 // This module connects the parts and runs the commands.
 
 import {
+  addImage,
   createProject,
   duplicateConnector,
   findConnector,
@@ -27,6 +28,7 @@ import {
   readProjectFile,
   saveFile,
 } from './files.js';
+import { BACKGROUND_MAX_SIZE, PHOTO_MAX_SIZE, isImageFile, loadPicture, pickImageFile } from './images.js';
 
 const EXAMPLE_URL = 'examples/tail-lamp-harness.openwire.json';
 const isMac = /Mac|iPhone|iPad|iPod/.test(navigator.platform || navigator.userAgent);
@@ -308,6 +310,120 @@ function swapEnds() {
   );
 }
 
+// ---------- Pictures ----------
+
+async function readPicture(file, maxSize) {
+  try {
+    return await loadPicture(file, maxSize);
+  } catch (error) {
+    toast(error.message, { error: true });
+    return null;
+  }
+}
+
+function setConnectorPhoto(connectorId, picture) {
+  const c = findConnector(store.project, connectorId);
+  if (!c) return;
+  store.update(
+    (project) => {
+      const target = findConnector(project, connectorId);
+      if (target) target.image = addImage(project, picture);
+    },
+    { source: 'app', structural: true },
+  );
+  toast(`Added the photo to ${c.ref}.`);
+}
+
+async function chooseConnectorPhoto() {
+  const sel = store.selection;
+  if (sel?.type !== 'connector') return;
+  // Ask for the file first: the browser only opens the file window during the click.
+  const file = await pickImageFile();
+  if (!file) return;
+  const picture = await readPicture(file, PHOTO_MAX_SIZE);
+  if (picture) setConnectorPhoto(sel.id, picture);
+}
+
+function removeConnectorPhoto() {
+  const sel = store.selection;
+  if (sel?.type !== 'connector') return;
+  store.update(
+    (project) => {
+      const c = findConnector(project, sel.id);
+      if (c) c.image = '';
+    },
+    { source: 'app', structural: true },
+  );
+  toast('Removed the photo. Undo brings it back.');
+}
+
+const snapTen = (v) => Math.round(v / 10) * 10;
+
+function setBackground(picture) {
+  const old = store.project.background;
+  const oldImage = old && store.project.images[old.image];
+  let scale;
+  let x;
+  let y;
+  if (oldImage) {
+    // A new picture takes the place and the width of the old picture.
+    scale = (oldImage.width * old.scale) / picture.width;
+    x = old.x;
+    y = old.y;
+  } else {
+    // A new picture fills most of the part of the drawing that you see.
+    const view = canvas.visibleRect();
+    scale = Math.min((view.width * 0.85) / picture.width, (view.height * 0.85) / picture.height);
+    x = snapTen(view.x + (view.width - picture.width * scale) / 2);
+    y = snapTen(view.y + (view.height - picture.height * scale) / 2);
+  }
+  store.update(
+    (project) => {
+      project.background = {
+        image: addImage(project, picture),
+        x,
+        y,
+        scale: Math.min(20, Math.max(0.01, scale)),
+        opacity: old?.opacity ?? 0.5,
+        movable: old?.movable ?? false,
+      };
+    },
+    { source: 'app', structural: true },
+  );
+  store.select(null);
+  showTab('properties');
+  toast(oldImage ? 'Changed the background picture.' : 'Added the background picture. Change its size and visibility in Properties.');
+}
+
+async function chooseBackground() {
+  const file = await pickImageFile();
+  if (!file) return;
+  const picture = await readPicture(file, BACKGROUND_MAX_SIZE);
+  if (picture) setBackground(picture);
+}
+
+function removeBackground() {
+  if (!store.project.background) return;
+  store.update(
+    (project) => {
+      project.background = null;
+    },
+    { source: 'app', structural: true },
+  );
+  toast('Removed the background picture. Undo brings it back.');
+}
+
+// A picture dropped on the page becomes the photo of the selected connector,
+// or the background picture when no connector is selected.
+async function dropPicture(file) {
+  const sel = store.selection;
+  const forConnector = sel?.type === 'connector';
+  const picture = await readPicture(file, forConnector ? PHOTO_MAX_SIZE : BACKGROUND_MAX_SIZE);
+  if (!picture) return;
+  if (forConnector) setConnectorPhoto(sel.id, picture);
+  else setBackground(picture);
+}
+
 // ---------- Print ----------
 
 function buildPrintSheet() {
@@ -359,6 +475,10 @@ const commands = {
   duplicate: duplicateSelection,
   delete: deleteSelection,
   'swap-ends': swapEnds,
+  'connector-photo': chooseConnectorPhoto,
+  'remove-connector-photo': removeConnectorPhoto,
+  'add-background': chooseBackground,
+  'remove-background': removeBackground,
   'zoom-in': () => canvas.zoomBy(1.25),
   'zoom-out': () => canvas.zoomBy(0.8),
   fit: () => canvas.fit(),
@@ -510,6 +630,10 @@ window.addEventListener('drop', (e) => {
   e.preventDefault();
   const dropped = e.dataTransfer.files?.[0];
   if (!dropped) return;
+  if (isImageFile(dropped)) {
+    dropPicture(dropped);
+    return;
+  }
   // Ask for the file handle during the event. Later the browser does not give it.
   const item = Array.from(e.dataTransfer.items || []).find((i) => i.kind === 'file');
   const handlePromise =

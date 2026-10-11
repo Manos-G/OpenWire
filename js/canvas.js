@@ -1,12 +1,24 @@
 // Drawing area. Renders the harness as SVG and handles mouse, pen and touch input.
 
-import { colorInfo, findConnector, findWire, isPositive, makeWire, serializeProject } from './model.js';
+import {
+  backgroundRect,
+  colorInfo,
+  findConnector,
+  findImage,
+  findWire,
+  isPositive,
+  makeWire,
+  serializeProject,
+} from './model.js';
 import { escapeHtml as esc, formatLength } from './report.js';
+import { pictureUrl } from './images.js';
 
 export const BOX_W = 176;
 export const HEAD_H = 30;
 export const ROW_H = 22;
 const NUM_W = 26;
+const PHOTO_PAD = 6;
+const PHOTO_MAX_H = 150;
 const SNAP = 10;
 const MIN_ZOOM = 0.2;
 const MAX_ZOOM = 4;
@@ -38,6 +50,8 @@ export const DIAGRAM_CSS = `
 .ow-label-ref { font-weight: 600; }
 .ow-sel { fill: none; stroke: #f2c12e; stroke-opacity: 0.7; stroke-linecap: round; stroke-linejoin: round; }
 .ow-title { fill: #52606d; font-size: 12px; }
+.ow-photo-line { stroke: #d8e0e7; stroke-width: 1; }
+.ow-photo-bg { fill: #f6f8fa; }
 `;
 
 const round = (v) => Math.round(v * 10) / 10;
@@ -45,8 +59,18 @@ const clamp = (v, min, max) => Math.min(max, Math.max(min, v));
 const snap = (v) => Math.round(v / SNAP) * SNAP;
 const truncate = (text, max) => (text.length > max ? `${text.slice(0, max - 1)}…` : text);
 
-export function connectorHeight(c) {
-  return HEAD_H + c.pins.length * ROW_H;
+// Size of the connector photo below the pins, or null when there is no photo.
+function photoBox(c, project) {
+  const img = project ? findImage(project, c.image) : null;
+  if (!img) return null;
+  const width = BOX_W - PHOTO_PAD * 2;
+  const height = Math.round(Math.min(PHOTO_MAX_H, (width * img.height) / img.width));
+  return { img, x: PHOTO_PAD, y: HEAD_H + c.pins.length * ROW_H + PHOTO_PAD, width, height };
+}
+
+export function connectorHeight(c, project = null) {
+  const photo = photoBox(c, project);
+  return HEAD_H + c.pins.length * ROW_H + (photo ? photo.height + PHOTO_PAD * 2 : 0);
 }
 
 function anchorPoint(c, pin, side) {
@@ -111,6 +135,7 @@ export function createCanvas(wrap, store) {
       <rect class="grid grid-major" width="100%" height="100%" fill="url(#owg-major)"/>
       <g class="viewport">
         <g class="content">
+          <g class="layer-background"></g>
           <g class="layer-wires"></g>
           <g class="layer-connectors"></g>
           <g class="layer-labels"></g>
@@ -131,6 +156,7 @@ export function createCanvas(wrap, store) {
   const viewport = svg.querySelector('.viewport');
   const content = svg.querySelector('.content');
   const layers = {
+    background: svg.querySelector('.layer-background'),
     wires: svg.querySelector('.layer-wires'),
     connectors: svg.querySelector('.layer-connectors'),
     labels: svg.querySelector('.layer-labels'),
@@ -181,18 +207,21 @@ export function createCanvas(wrap, store) {
   }
 
   function modelBounds() {
-    const { connectors } = store.project;
-    if (!connectors.length) return null;
+    const project = store.project;
+    const bg = backgroundRect(project);
+    if (!project.connectors.length && !bg) return null;
     let minX = Infinity;
     let minY = Infinity;
     let maxX = -Infinity;
     let maxY = -Infinity;
-    for (const c of connectors) {
-      minX = Math.min(minX, c.x);
-      minY = Math.min(minY, c.y);
-      maxX = Math.max(maxX, c.x + BOX_W);
-      maxY = Math.max(maxY, c.y + connectorHeight(c));
-    }
+    const add = (x, y, w, h) => {
+      minX = Math.min(minX, x);
+      minY = Math.min(minY, y);
+      maxX = Math.max(maxX, x + w);
+      maxY = Math.max(maxY, y + h);
+    };
+    for (const c of project.connectors) add(c.x, c.y, BOX_W, connectorHeight(c, project));
+    if (bg) add(bg.x, bg.y, bg.width, bg.height);
     return { x: minX - 60, y: minY - 30, width: maxX - minX + 120, height: maxY - minY + 60 };
   }
 
@@ -226,7 +255,7 @@ export function createCanvas(wrap, store) {
     const project = store.project;
     if (target?.type === 'connector') {
       const c = findConnector(project, target.id);
-      if (c) centerOn(c.x + BOX_W / 2, c.y + connectorHeight(c) / 2);
+      if (c) centerOn(c.x + BOX_W / 2, c.y + connectorHeight(c, project) / 2);
     } else if (target?.type === 'wire') {
       const w = findWire(project, target.id);
       const g = w && wireGeometry(project, w);
@@ -243,7 +272,7 @@ export function createCanvas(wrap, store) {
     let y = snap(center.y - h / 2);
     const overlaps = () =>
       store.project.connectors.some(
-        (c) => x < c.x + BOX_W + 20 && x + BOX_W + 20 > c.x && y < c.y + connectorHeight(c) + 20 && y + h + 20 > c.y,
+        (c) => x < c.x + BOX_W + 20 && x + BOX_W + 20 > c.x && y < c.y + connectorHeight(c, store.project) + 20 && y + h + 20 > c.y,
       );
     for (let i = 0; i < 40 && overlaps(); i += 1) {
       x += 30;
@@ -252,11 +281,53 @@ export function createCanvas(wrap, store) {
     return { x, y };
   }
 
+  // The part of the drawing that you can see, in drawing units.
+  function visibleRect() {
+    const r = size();
+    return { x: -view.x / view.k, y: -view.y / view.k, width: r.width / view.k, height: r.height / view.k };
+  }
+
   // ---------- Rendering ----------
+
+  let backgroundKey = '';
+
+  function renderBackground() {
+    const project = store.project;
+    const bg = project.background;
+    const rect = backgroundRect(project);
+    const img = rect && findImage(project, bg.image);
+    const key = img ? `${bg.image}|${rect.x}|${rect.y}|${rect.width}|${bg.opacity}|${bg.movable}` : '';
+    if (key === backgroundKey) return;
+    backgroundKey = key;
+    if (!img) {
+      layers.background.innerHTML = '';
+      return;
+    }
+    const x = round(rect.x);
+    const y = round(rect.y);
+    const w = round(rect.width);
+    const h = round(rect.height);
+    layers.background.innerHTML = `
+      <image class="ow-bg${bg.movable ? ' is-movable' : ''}" data-image="${esc(bg.image)}"${bg.movable ? ' data-bg="1"' : ''}
+        href="${esc(pictureUrl(img))}" x="${x}" y="${y}" width="${w}" height="${h}" opacity="${bg.opacity}" preserveAspectRatio="none"/>
+      ${bg.movable ? `<rect class="ow-bg-frame" x="${x}" y="${y}" width="${w}" height="${h}"/>` : ''}`;
+  }
+
+  function renderPhoto(c, id) {
+    const box = photoBox(c, store.project);
+    if (!box) return '';
+    const top = HEAD_H + c.pins.length * ROW_H;
+    return `<g class="ow-head-g ow-photo" data-conn-head="${id}">
+      <line class="ow-photo-line" x1="0" y1="${top}" x2="${BOX_W}" y2="${top}"/>
+      <rect class="ow-photo-bg" x="${box.x}" y="${box.y}" width="${box.width}" height="${box.height}"/>
+      <image data-image="${esc(c.image)}" href="${esc(pictureUrl(box.img))}" x="${box.x}" y="${box.y}"
+        width="${box.width}" height="${box.height}" preserveAspectRatio="xMidYMid meet"/>
+    </g>`;
+  }
 
   function renderConnector(c, sides, selected) {
     const id = esc(c.id);
-    const h = connectorHeight(c);
+    const h = connectorHeight(c, store.project);
     const rows = c.pins
       .map((p, i) => {
         const n = i + 1;
@@ -285,6 +356,7 @@ export function createCanvas(wrap, store) {
         <text class="ow-pn" x="${BOX_W - 10}" y="${HEAD_H / 2}" text-anchor="end" dominant-baseline="central">${esc(truncate(c.partNumber, 20))}</text>
       </g>
       ${rows}
+      ${renderPhoto(c, id)}
     </g>`;
   }
 
@@ -370,6 +442,7 @@ export function createCanvas(wrap, store) {
       labels.push(renderLabel(w, g));
     }
     if (selectedWire) wires.push(selectedWire);
+    renderBackground();
     layers.wires.innerHTML = wires.join('');
     layers.connectors.innerHTML = project.connectors
       .map((c) => renderConnector(c, sides, sel?.type === 'connector' && sel.id === c.id))
@@ -553,6 +626,22 @@ export function createCanvas(wrap, store) {
       return;
     }
 
+    const bgEl = middle ? null : e.target.closest?.('[data-bg]');
+    const bg = store.project.background;
+    if (bgEl && bg) {
+      const p = toWorld(e.clientX, e.clientY);
+      gesture = {
+        type: 'bg',
+        token: `bg:${e.timeStamp}:${Math.random()}`,
+        offsetX: p.x - bg.x,
+        offsetY: p.y - bg.y,
+        startX: e.clientX,
+        startY: e.clientY,
+        moved: false,
+      };
+      return;
+    }
+
     gesture = { type: 'pan', startX: e.clientX, startY: e.clientY, viewX: view.x, viewY: view.y, moved: false };
     svg.classList.add('is-panning');
   }
@@ -606,6 +695,26 @@ export function createCanvas(wrap, store) {
         }
         break;
       }
+      case 'bg': {
+        if (!gesture.moved && Math.hypot(e.clientX - gesture.startX, e.clientY - gesture.startY) < 3) return;
+        gesture.moved = true;
+        const p = toWorld(e.clientX, e.clientY);
+        const x = snap(p.x - gesture.offsetX);
+        const y = snap(p.y - gesture.offsetY);
+        const bg = store.project.background;
+        if (bg && (bg.x !== x || bg.y !== y)) {
+          store.update(
+            (project) => {
+              if (project.background) {
+                project.background.x = x;
+                project.background.y = y;
+              }
+            },
+            { source: 'canvas', kind: 'move', coalesce: gesture.token },
+          );
+        }
+        break;
+      }
       case 'wire': {
         if (Math.hypot(e.clientX - gesture.startX, e.clientY - gesture.startY) > 6) gesture.moved = true;
         drawTemp(gesture.source, toWorld(e.clientX, e.clientY));
@@ -636,7 +745,8 @@ export function createCanvas(wrap, store) {
     if (!g) return;
 
     if (g.type === 'pan' && !g.moved && !cancelled) store.select(null);
-    if (g.type === 'drag') store.endCoalesce();
+    if (g.type === 'drag' || g.type === 'bg') store.endCoalesce();
+    if (g.type === 'bg' && !g.moved && !cancelled) store.select(null);
     if (g.type === 'wire') {
       const target = cancelled ? null : pinAt(e.clientX, e.clientY);
       if (target && !samePin(target, g.source)) {
@@ -683,6 +793,7 @@ export function createCanvas(wrap, store) {
 
   store.subscribe((type) => {
     if (type === 'replace') {
+      backgroundKey = '';
       pending = null;
       clearTemp();
       render();
@@ -726,7 +837,15 @@ export function createCanvas(wrap, store) {
     const height = Math.ceil(box.height + pad * 2 + titleSpace);
 
     const clone = content.cloneNode(true);
-    for (const el of clone.querySelectorAll('.ow-hit, .ow-sel')) el.remove();
+    for (const el of clone.querySelectorAll('.ow-hit, .ow-sel, .ow-bg-frame')) el.remove();
+    // Put the full picture data into the file, so the SVG works without OpenWire.
+    for (const el of clone.querySelectorAll('image[data-image]')) {
+      const img = findImage(store.project, el.getAttribute('data-image'));
+      if (img) el.setAttribute('href', img.data);
+      else el.remove();
+      el.removeAttribute('data-image');
+      el.removeAttribute('data-bg');
+    }
     for (const el of clone.querySelectorAll('.is-source, .is-target')) el.classList.remove('is-source', 'is-target');
     const markup = new XMLSerializer().serializeToString(clone);
 
@@ -751,6 +870,7 @@ export function createCanvas(wrap, store) {
     cancelPending,
     exportSvg,
     placeForNewConnector,
+    visibleRect,
     zoomBy(factor) {
       const r = size();
       zoomAt(factor, r.width / 2, r.height / 2);

@@ -89,8 +89,10 @@ export function createProject(name = 'Untitled harness') {
     version: FORMAT_VERSION,
     meta: { name, author: '', revision: 'A', created: now, modified: now },
     settings: { cutMargin: 20, currency: '€' },
+    background: null,
     connectors: [],
     wires: [],
+    images: {},
   };
 }
 
@@ -117,6 +119,7 @@ export function makeConnector(project, { x = 0, y = 0, pinCount = 4 } = {}) {
     price: 0,
     contactPartNumber: '',
     contactPrice: 0,
+    image: '',
     pins: Array.from({ length: clampInt(pinCount, 1, MAX_PINS) }, () => ({ label: '' })),
   };
 }
@@ -222,6 +225,43 @@ export function endLabel(project, end) {
 export function pinLabel(project, end) {
   const connector = findConnector(project, end.connector);
   return connector?.pins[end.pin - 1]?.label || '';
+}
+
+// ---------- Pictures ----------
+// A picture is stored one time in project.images. Connectors and the background
+// refer to it by its id. Pictures do not change, so a new picture gets a new id.
+
+const IMAGE_DATA = /^data:image\/(png|jpeg|webp|gif);base64,[A-Za-z0-9+/=]+$/;
+
+export function addImage(project, picture) {
+  const id = newId('i');
+  project.images[id] = {
+    name: str(picture.name),
+    width: Math.round(picture.width),
+    height: Math.round(picture.height),
+    data: picture.data,
+  };
+  return id;
+}
+
+export function findImage(project, id) {
+  return (id && project.images?.[id]) || null;
+}
+
+export function referencedImages(project) {
+  const ids = new Set();
+  for (const c of project.connectors) if (c.image) ids.add(c.image);
+  if (project.background?.image) ids.add(project.background.image);
+  return ids;
+}
+
+// Size of the background picture in drawing units.
+export function backgroundRect(project) {
+  const bg = project.background;
+  const img = findImage(project, bg?.image);
+  if (!bg || !img) return null;
+  const width = img.width * bg.scale;
+  return { x: bg.x, y: bg.y, width, height: (width * img.height) / img.width };
 }
 
 // ---------- Calculations ----------
@@ -366,8 +406,19 @@ export function runChecks(project) {
 
 // ---------- Files ----------
 
+// The pictures go last, so the text of the project stays easy to compare in Git.
+// Pictures that nothing uses are not saved.
 export function serializeProject(project) {
-  return JSON.stringify(project, null, 2);
+  const images = {};
+  for (const id of referencedImages(project)) {
+    if (project.images?.[id]) images[id] = project.images[id];
+  }
+  const { format, version, meta, settings, background, connectors, wires } = project;
+  return JSON.stringify(
+    { format, version, meta, settings, background: background || null, connectors, wires, images },
+    null,
+    2,
+  );
 }
 
 // Checks a loaded object and returns a clean project.
@@ -400,6 +451,28 @@ export function normalizeProject(raw) {
     currency: str(settings.currency, '€'),
   };
 
+  const rawImages = raw.images && typeof raw.images === 'object' ? raw.images : {};
+  for (const [id, img] of Object.entries(rawImages)) {
+    if (!img || typeof img !== 'object') continue;
+    const width = numberOr(img.width, 0);
+    const height = numberOr(img.height, 0);
+    if (typeof img.data !== 'string' || !IMAGE_DATA.test(img.data) || !(width > 0) || !(height > 0)) continue;
+    project.images[id] = { name: str(img.name), width, height, data: img.data };
+  }
+  const imageOrEmpty = (id) => (typeof id === 'string' && project.images[id] ? id : '');
+
+  const bg = raw.background && typeof raw.background === 'object' ? raw.background : null;
+  if (bg && imageOrEmpty(bg.image)) {
+    project.background = {
+      image: bg.image,
+      x: numberOr(bg.x, 0),
+      y: numberOr(bg.y, 0),
+      scale: Math.min(20, Math.max(0.01, numberOr(bg.scale, 1))),
+      opacity: Math.min(1, Math.max(0.05, numberOr(bg.opacity, 0.5))),
+      movable: bg.movable === true,
+    };
+  }
+
   const connectorIds = new Map();
   for (const c of arr(raw.connectors)) {
     if (!c || typeof c !== 'object') continue;
@@ -420,6 +493,7 @@ export function normalizeProject(raw) {
       price: numberOr(c.price, 0),
       contactPartNumber: str(c.contactPartNumber),
       contactPrice: numberOr(c.contactPrice, 0),
+      image: imageOrEmpty(c.image),
       pins,
     };
     connectorIds.set(id, connector);

@@ -10,6 +10,13 @@ import { findConnector, findWire } from './model.js';
 
 const HISTORY_LIMIT = 200;
 
+// Pictures are large and they never change. The undo history does not copy them:
+// a restored step uses the pictures of the open project. Removed pictures stay
+// in memory until you save, so undo can bring them back.
+function snapshot(project) {
+  return JSON.stringify(project, (key, value) => (key === 'images' ? undefined : value));
+}
+
 export function createStore(initialProject) {
   let project = initialProject;
   let selection = null;
@@ -48,7 +55,7 @@ export function createStore(initialProject) {
     update(mutate, info = {}) {
       const key = info.coalesce || null;
       if (!key || key !== coalesceKey) {
-        past.push(JSON.stringify(project));
+        past.push(snapshot(project));
         if (past.length > HISTORY_LIMIT) past.shift();
         future.length = 0;
       }
@@ -66,8 +73,8 @@ export function createStore(initialProject) {
 
     undo() {
       if (!past.length) return false;
-      future.push(JSON.stringify(project));
-      project = JSON.parse(past.pop());
+      future.push(snapshot(project));
+      project = { ...JSON.parse(past.pop()), images: project.images };
       coalesceKey = null;
       if (!selectionIsValid()) selection = null;
       emit('change', { source: 'history', structural: true });
@@ -77,8 +84,8 @@ export function createStore(initialProject) {
 
     redo() {
       if (!future.length) return false;
-      past.push(JSON.stringify(project));
-      project = JSON.parse(future.pop());
+      past.push(snapshot(project));
+      project = { ...JSON.parse(future.pop()), images: project.images };
       coalesceKey = null;
       if (!selectionIsValid()) selection = null;
       emit('change', { source: 'history', structural: true });

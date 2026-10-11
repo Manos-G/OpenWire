@@ -13,6 +13,8 @@ OpenWire is a free, open-source tool to draw wire harnesses. It operates in your
 - Give each wire a color, a stripe, a gauge and a length. The colors use the IEC 60757 codes, for example BK, RD and GN.
 - See the cut list. OpenWire adds an extra length to each wire. You need this length to strip and crimp the wire.
 - See the bill of materials. OpenWire puts the parts with the same part number on one line.
+- Add a photo to each connector. The photo shows in the drawing and in the printout.
+- Put a background picture behind the harness, for example a photo of the vehicle or the panel.
 - Find problems in the **Checks** tab, for example a wire without a length.
 - Undo and redo all changes.
 - Save the project as a file on your computer. Open the file again at a later time.
@@ -78,6 +80,29 @@ A new wire has no length. Type the length in the **Properties** tab. The new wir
 When you delete a connector, OpenWire also deletes the wires on it. Click **Undo** to get them back.
 
 To change the harness name, the revision, the author or the extra length per wire, click an empty area of the drawing. The **Properties** tab then shows the harness.
+
+### Add pictures
+
+To add a photo to a connector:
+
+1. Click the connector.
+2. In the **Properties** tab, click **Add photo**.
+3. Select a picture. On a phone, you can also take a photo with the camera.
+
+The photo shows below the pins of the connector. To move the connector, you can also drag its photo.
+
+To add a background picture:
+
+1. Click an empty area of the drawing. The **Properties** tab shows the harness.
+2. Click **Add background picture**. Select a picture.
+3. Use **Size** and **Visibility** to adjust the picture.
+4. To move the picture, turn on **Move the picture**. Drag the picture in the drawing. Then turn off **Move the picture**.
+
+You can also drag a picture file into the window. If a connector is selected, the picture becomes its photo. If no connector is selected, the picture becomes the background picture.
+
+OpenWire makes large photos smaller before it keeps them. A connector photo is a maximum of 900 pixels. A background picture is a maximum of 2400 pixels. Each picture adds approximately 50 to 300 kB to the project file.
+
+> **NOTE:** The pictures are in the project file. When you send the file to a different person, the pictures go with it.
 
 ### Get the cut list and the BOM
 
@@ -154,6 +179,7 @@ OpenWire saves projects as JSON text. You can compare two versions of a file in 
 
 - Pin numbers start at 1.
 - Lengths are in millimeters.
+- The `images` part contains the pictures as text (data URLs). A connector refers to its photo with the `image` field. The `background` part refers to the background picture.
 - The `version` number shows the format version. This version of OpenWire opens version 1.
 
 For a full example, refer to [examples/tail-lamp-harness.openwire.json](examples/tail-lamp-harness.openwire.json).
@@ -182,6 +208,7 @@ js/canvas.js       SVG drawing, mouse and touch input, SVG export
 js/inspector.js    Properties tab
 js/tables.js       Cut list, BOM and Checks tabs
 js/report.js       Table data, CSV and HTML tables
+js/images.js       Read pictures, make them smaller, show them
 js/files.js        Open, save, download and the draft copy
 examples/          Example project
 fonts/             Barlow Semi Condensed font

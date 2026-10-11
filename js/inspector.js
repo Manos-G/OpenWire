@@ -13,6 +13,7 @@ import {
   cutLength,
   endLabel,
   findConnector,
+  findImage,
   findWire,
   isPositive,
   numberOr,
@@ -24,6 +25,7 @@ import {
   wiresRemovedByPinCount,
 } from './model.js';
 import { escapeHtml as esc, formatLength, formatMeters } from './report.js';
+import { formatBytes, pictureBytes, pictureUrl } from './images.js';
 
 let uid = 0;
 const nextId = () => {
@@ -77,6 +79,29 @@ function colorField({ field, label, value, allowNone = false }) {
   </div>`;
 }
 
+function rangeField({ field, label, value, min, max, unit }) {
+  const id = nextId();
+  return `<div class="field range-field">
+    <label for="${id}">${esc(label)}</label>
+    <div class="range-row">
+      <input class="range" id="${id}" type="range" data-field="${field}" min="${min}" max="${max}" step="1" value="${value}">
+      <output for="${id}" data-output-for="${field}">${value} ${esc(unit)}</output>
+    </div>
+  </div>`;
+}
+
+function checkField({ field, label, checked, help = '' }) {
+  const id = nextId();
+  return `<div class="field check-field">
+    <label for="${id}"><input id="${id}" type="checkbox" data-field="${field}"${checked ? ' checked' : ''}> ${esc(label)}</label>
+    ${help ? `<p class="field-help">${esc(help)}</p>` : ''}
+  </div>`;
+}
+
+function pictureFacts(img) {
+  return `${esc(img.name || 'Picture')}, ${img.width} × ${img.height} px, ${formatBytes(pictureBytes(img))}`;
+}
+
 function swatch(code, field) {
   const hex = colorInfo(code)?.hex;
   return `<span class="swatch${hex ? '' : ' is-none'}" data-swatch="${field}"${hex ? ` style="--swatch:${hex}"` : ''} aria-hidden="true"></span>`;
@@ -100,9 +125,52 @@ export function createInspector(root, store) {
         ${textField({ field: 'settings.currency', label: 'Currency', value: p.settings.currency, maxlength: 4 })}
       </div>
       <p class="field-help">The cut list adds the extra length to each wire, for stripping and crimping.</p>
+      ${renderBackground()}
       <h3 class="section-title">Summary</h3>
       <dl class="outputs" data-outputs></dl>
       <p class="props-hint">To add a wire, drag from one pin to a different pin. Or select one pin, then select the other pin.</p>`;
+  }
+
+  function renderBackground() {
+    const p = store.project;
+    const bg = p.background;
+    const img = findImage(p, bg?.image);
+    if (!img) {
+      return `<h3 class="section-title">Background picture</h3>
+        <p class="field-help">Put a photo or a drawing behind the harness, for example a photo of the vehicle or the panel. Then put the connectors on it.</p>
+        <div class="photo-actions"><button type="button" class="button" data-cmd="add-background">Add background picture</button></div>`;
+    }
+    return `<h3 class="section-title">Background picture</h3>
+      <figure class="photo-preview is-small"><img src="${esc(pictureUrl(img))}" alt="Background picture"></figure>
+      <p class="field-help">${pictureFacts(img)}</p>
+      ${rangeField({ field: 'background.scale', label: 'Size', value: Math.round(bg.scale * 100), min: 5, max: 300, unit: '%' })}
+      ${rangeField({ field: 'background.opacity', label: 'Visibility', value: Math.round(bg.opacity * 100), min: 10, max: 100, unit: '%' })}
+      ${checkField({
+        field: 'background.movable',
+        label: 'Move the picture',
+        checked: bg.movable,
+        help: 'When this is on, drag the picture in the drawing to move it. Turn it off when the picture is in the correct position.',
+      })}
+      <div class="photo-actions">
+        <button type="button" class="button" data-cmd="add-background">Change picture</button>
+        <button type="button" class="button danger" data-cmd="remove-background">Remove picture</button>
+      </div>`;
+  }
+
+  function renderConnectorPhoto(c) {
+    const img = findImage(store.project, c.image);
+    if (!img) {
+      return `<h3 class="section-title">Photo</h3>
+        <p class="field-help">Add a photo of the connector. The photo shows in the drawing and in the printout.</p>
+        <div class="photo-actions"><button type="button" class="button" data-cmd="connector-photo">Add photo</button></div>`;
+    }
+    return `<h3 class="section-title">Photo</h3>
+      <figure class="photo-preview"><img src="${esc(pictureUrl(img))}" alt="Photo of the connector"></figure>
+      <p class="field-help">${pictureFacts(img)}</p>
+      <div class="photo-actions">
+        <button type="button" class="button" data-cmd="connector-photo">Change photo</button>
+        <button type="button" class="button danger" data-cmd="remove-connector-photo">Remove photo</button>
+      </div>`;
   }
 
   function projectOutputs() {
@@ -147,6 +215,7 @@ export function createInspector(root, store) {
         ${numberField({ field: 'price', label: 'Unit price', value: c.price || '', unit: currency, step: 0.01 })}
       </div>
       ${textField({ field: 'description', label: 'Description', value: c.description })}
+      ${renderConnectorPhoto(c)}
       <h3 class="section-title">Contacts</h3>
       <div class="field-row">
         ${textField({ field: 'contactPartNumber', label: 'Contact part number', value: c.contactPartNumber })}
@@ -262,6 +331,25 @@ export function createInspector(root, store) {
       case 'settings.currency':
         project.settings.currency = raw.trim();
         break;
+      case 'background.scale': {
+        const bg = project.background;
+        const img = findImage(project, bg?.image);
+        if (!img) break;
+        // Keep the middle of the picture in the same place.
+        const scale = Math.min(20, Math.max(0.01, numberOr(raw, 100) / 100));
+        const cx = bg.x + (img.width * bg.scale) / 2;
+        const cy = bg.y + (img.height * bg.scale) / 2;
+        bg.scale = scale;
+        bg.x = Math.round(cx - (img.width * scale) / 2);
+        bg.y = Math.round(cy - (img.height * scale) / 2);
+        break;
+      }
+      case 'background.opacity':
+        if (project.background) project.background.opacity = Math.min(1, Math.max(0.05, numberOr(raw, 50) / 100));
+        break;
+      case 'background.movable':
+        if (project.background) project.background.movable = raw === true;
+        break;
       default:
         break;
     }
@@ -288,7 +376,7 @@ export function createInspector(root, store) {
     const pin = el.dataset.pinLabel;
     if (!field && !pin) return;
     const sel = store.selection;
-    const raw = el.value;
+    const raw = el.type === 'checkbox' ? el.checked : el.value;
     const key = `${sel ? `${sel.type}:${sel.id}` : 'project'}:${field || `pin-${pin}`}`;
 
     store.update(
@@ -311,6 +399,9 @@ export function createInspector(root, store) {
       },
       { source: 'inspector', coalesce: key },
     );
+
+    const output = root.querySelector(`[data-output-for="${field}"]`);
+    if (output) output.textContent = `${el.value} %`;
 
     if (field === 'ref') {
       const title = root.querySelector('[data-title]');
@@ -347,14 +438,14 @@ export function createInspector(root, store) {
 
   root.addEventListener('input', (e) => {
     const el = e.target;
-    if (el.tagName === 'SELECT' || el.dataset.on === 'change') return;
+    if (el.tagName === 'SELECT' || el.type === 'checkbox' || el.dataset.on === 'change') return;
     applyInput(el);
   });
 
   root.addEventListener('change', (e) => {
     const el = e.target;
     if (el.dataset.field === 'pinCount') changePinCount(el);
-    else if (el.tagName === 'SELECT') applyInput(el);
+    else if (el.tagName === 'SELECT' || el.type === 'checkbox') applyInput(el);
   });
 
   // The next edit of the same field starts a new undo step.

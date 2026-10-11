@@ -1155,3 +1155,80 @@ p {
     break-inside: avoid;
   }
 }
+
+/* ---------- Pictures ---------- */
+
+.ow-bg.is-movable {
+  cursor: move;
+}
+
+.ow-bg-frame {
+  fill: none;
+  stroke: #1f5fbf;
+  stroke-width: 1.5;
+  stroke-dasharray: 6 4;
+  vector-effect: non-scaling-stroke;
+  pointer-events: none;
+}
+
+.photo-preview {
+  margin: 0 0 4px;
+  padding: 6px;
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+  background: #ffffff;
+}
+
+.photo-preview img {
+  display: block;
+  width: 100%;
+  max-height: 220px;
+  object-fit: contain;
+}
+
+.photo-preview.is-small img {
+  max-height: 120px;
+}
+
+.photo-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 8px 0 4px;
+}
+
+.range-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 54px;
+  align-items: center;
+  gap: 10px;
+}
+
+.range {
+  width: 100%;
+  min-height: var(--tap);
+  margin: 0;
+  accent-color: var(--ink);
+}
+
+.range-row output {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.check-field label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: var(--tap);
+  color: var(--ink);
+  font-size: 15px;
+  cursor: pointer;
+}
+
+.check-field input {
+  width: 18px;
+  height: 18px;
+  margin: 0;
+  accent-color: var(--ink);
+}
