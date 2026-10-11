@@ -1,0 +1,99 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>OpenWire</title>
+  <meta name="description" content="Draw wire harnesses in your browser. Get the cut list and the bill of materials. Your files stay on your computer.">
+  <meta name="color-scheme" content="light dark">
+  <meta name="theme-color" content="#f5f7f9" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#1b232b" media="(prefers-color-scheme: dark)">
+  <link rel="icon" href="favicon.svg" type="image/svg+xml">
+  <link rel="preload" href="fonts/barlow-semi-condensed-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="fonts/barlow-semi-condensed-latin-600-normal.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="css/style.css">
+  <script type="module" src="js/app.js"></script>
+</head>
+<body>
+  <div class="app">
+    <header class="topbar">
+      <a class="brand" href="https://github.com/Manos-G/OpenWire" title="OpenWire on GitHub">
+        <svg class="brand-mark" viewBox="0 0 24 24" aria-hidden="true">
+          <rect x="2" y="5" width="8" height="14" rx="1.5" fill="currentColor"/>
+          <path d="M10 8.5C15 8.5 15 6 22 6" stroke="#d0312d" stroke-width="2.2" fill="none" stroke-linecap="round"/>
+          <path d="M10 12H22" stroke="#f3c515" stroke-width="2.2" fill="none" stroke-linecap="round"/>
+          <path d="M10 15.5C15 15.5 15 18 22 18" stroke="#1f5fbf" stroke-width="2.2" fill="none" stroke-linecap="round"/>
+        </svg>
+        <span>OpenWire</span>
+      </a>
+
+      <nav class="toolbar" aria-label="Main commands">
+        <div class="menu">
+          <button type="button" class="button" id="file-button" aria-haspopup="menu" aria-expanded="false" aria-controls="file-menu">File</button>
+          <div class="menu-list" id="file-menu" role="menu" aria-labelledby="file-button" hidden>
+            <button type="button" role="menuitem" data-cmd="new">New drawing</button>
+            <button type="button" role="menuitem" data-cmd="open">Open… <kbd data-keys="Ctrl+O"></kbd></button>
+            <button type="button" role="menuitem" data-cmd="save">Save <kbd data-keys="Ctrl+S"></kbd></button>
+            <button type="button" role="menuitem" data-cmd="save-as">Save as… <kbd data-keys="Ctrl+Shift+S"></kbd></button>
+            <hr>
+            <button type="button" role="menuitem" data-cmd="export-svg">Export drawing (SVG)</button>
+            <button type="button" role="menuitem" data-cmd="export-cutlist">Download cut list (CSV)</button>
+            <button type="button" role="menuitem" data-cmd="export-bom">Download BOM (CSV)</button>
+            <button type="button" role="menuitem" data-cmd="print">Print or save as PDF</button>
+            <hr>
+            <button type="button" role="menuitem" data-cmd="example">Open the example</button>
+          </div>
+        </div>
+        <button type="button" class="icon-button" data-cmd="undo" aria-label="Undo" data-tip="Undo" data-keys="Ctrl+Z" disabled>
+          <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M7.5 5 3.5 9l4 4" /><path d="M4 9h8a4.5 4.5 0 0 1 0 9H9" /></svg>
+        </button>
+        <button type="button" class="icon-button" data-cmd="redo" aria-label="Redo" data-tip="Redo" data-keys="Ctrl+Shift+Z" disabled>
+          <svg viewBox="0 0 20 20" aria-hidden="true"><path d="m12.5 5 4 4-4 4" /><path d="M16 9H8a4.5 4.5 0 0 0 0 9h3" /></svg>
+        </button>
+        <button type="button" class="button primary" data-cmd="add-connector">Add connector</button>
+      </nav>
+
+      <div class="doc" aria-live="polite">
+        <span class="doc-name" id="doc-name">Untitled harness</span>
+        <span class="doc-state" id="doc-state">Not saved to a file</span>
+      </div>
+
+      <div class="zoom" role="group" aria-label="Zoom">
+        <button type="button" class="icon-button" data-cmd="zoom-out" aria-label="Zoom out" data-tip="Zoom out" data-keys="-">
+          <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M5 10h10" /></svg>
+        </button>
+        <button type="button" class="icon-button" data-cmd="zoom-in" aria-label="Zoom in" data-tip="Zoom in" data-keys="+">
+          <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M5 10h10M10 5v10" /></svg>
+        </button>
+        <button type="button" class="button" data-cmd="fit" data-tip="Show the full drawing" data-keys="F">Fit</button>
+      </div>
+    </header>
+
+    <main class="workspace">
+      <section class="canvas-wrap" id="canvas" aria-label="Drawing"></section>
+
+      <aside class="dock" aria-label="Details">
+        <div class="tabs" role="tablist" aria-label="Details">
+          <button type="button" role="tab" id="tab-properties" data-tab="properties" aria-controls="panel-properties" aria-selected="true">Properties</button>
+          <button type="button" role="tab" id="tab-cutlist" data-tab="cutlist" aria-controls="panel-cutlist" aria-selected="false" tabindex="-1">Cut list</button>
+          <button type="button" role="tab" id="tab-bom" data-tab="bom" aria-controls="panel-bom" aria-selected="false" tabindex="-1">BOM</button>
+          <button type="button" role="tab" id="tab-checks" data-tab="checks" aria-controls="panel-checks" aria-selected="false" tabindex="-1">
+            Checks <span class="badge" id="checks-badge" hidden></span>
+          </button>
+        </div>
+        <div class="panel" id="panel-properties" role="tabpanel" aria-labelledby="tab-properties" tabindex="-1"></div>
+        <div class="panel is-table" id="panel-cutlist" role="tabpanel" aria-labelledby="tab-cutlist" tabindex="-1" hidden></div>
+        <div class="panel is-table" id="panel-bom" role="tabpanel" aria-labelledby="tab-bom" tabindex="-1" hidden></div>
+        <div class="panel" id="panel-checks" role="tabpanel" aria-labelledby="tab-checks" tabindex="-1" hidden></div>
+      </aside>
+    </main>
+  </div>
+
+  <div class="toasts" id="toasts" role="status" aria-live="polite"></div>
+  <div class="print-sheet" id="print-sheet"></div>
+
+  <noscript>
+    <p class="noscript">OpenWire needs JavaScript. Turn on JavaScript and load the page again.</p>
+  </noscript>
+</body>
+</html>

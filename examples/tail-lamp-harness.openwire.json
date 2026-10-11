@@ -1,0 +1,171 @@
+{
+  "format": "openwire",
+  "version": 1,
+  "meta": {
+    "name": "Tail lamp harness (example)",
+    "author": "OpenWire",
+    "revision": "A",
+    "created": "2026-09-28T09:00:00.000Z",
+    "modified": "2026-09-28T09:00:00.000Z"
+  },
+  "settings": {
+    "cutMargin": 20,
+    "currency": "€"
+  },
+  "connectors": [
+    {
+      "id": "c-x1",
+      "ref": "X1",
+      "x": 0,
+      "y": 40,
+      "partNumber": "DT06-08SA",
+      "manufacturer": "TE Connectivity (Deutsch)",
+      "description": "Vehicle side, 8-way plug",
+      "price": 4.2,
+      "contactPartNumber": "0462-201-16141",
+      "contactPrice": 0.35,
+      "pins": [
+        { "label": "GND left" },
+        { "label": "TAIL left" },
+        { "label": "STOP left" },
+        { "label": "IND left" },
+        { "label": "GND right" },
+        { "label": "TAIL right" },
+        { "label": "STOP right" },
+        { "label": "IND right" }
+      ]
+    },
+    {
+      "id": "c-x2",
+      "ref": "X2",
+      "x": 460,
+      "y": -40,
+      "partNumber": "DT06-4S",
+      "manufacturer": "TE Connectivity (Deutsch)",
+      "description": "Left lamp, 4-way plug",
+      "price": 2.1,
+      "contactPartNumber": "0462-201-16141",
+      "contactPrice": 0.35,
+      "pins": [{ "label": "GND" }, { "label": "TAIL" }, { "label": "STOP" }, { "label": "IND" }]
+    },
+    {
+      "id": "c-x3",
+      "ref": "X3",
+      "x": 460,
+      "y": 200,
+      "partNumber": "DT06-4S",
+      "manufacturer": "TE Connectivity (Deutsch)",
+      "description": "Right lamp, 4-way plug",
+      "price": 2.1,
+      "contactPartNumber": "0462-201-16141",
+      "contactPrice": 0.35,
+      "pins": [{ "label": "GND" }, { "label": "TAIL" }, { "label": "STOP" }, { "label": "IND" }]
+    }
+  ],
+  "wires": [
+    {
+      "id": "w-1",
+      "ref": "W1",
+      "from": { "connector": "c-x1", "pin": 1 },
+      "to": { "connector": "c-x2", "pin": 1 },
+      "color": "BK",
+      "stripe": "",
+      "gauge": "0.75 mm²",
+      "length": 900,
+      "signal": "GND",
+      "partNumber": "FLRY-B 0.75 BK",
+      "pricePerMeter": 0.32
+    },
+    {
+      "id": "w-2",
+      "ref": "W2",
+      "from": { "connector": "c-x1", "pin": 2 },
+      "to": { "connector": "c-x2", "pin": 2 },
+      "color": "GY",
+      "stripe": "",
+      "gauge": "0.5 mm²",
+      "length": 900,
+      "signal": "TAIL",
+      "partNumber": "FLRY-B 0.5 GY",
+      "pricePerMeter": 0.24
+    },
+    {
+      "id": "w-3",
+      "ref": "W3",
+      "from": { "connector": "c-x1", "pin": 3 },
+      "to": { "connector": "c-x2", "pin": 3 },
+      "color": "RD",
+      "stripe": "",
+      "gauge": "0.5 mm²",
+      "length": 900,
+      "signal": "STOP",
+      "partNumber": "FLRY-B 0.5 RD",
+      "pricePerMeter": 0.24
+    },
+    {
+      "id": "w-4",
+      "ref": "W4",
+      "from": { "connector": "c-x1", "pin": 4 },
+      "to": { "connector": "c-x2", "pin": 4 },
+      "color": "GN",
+      "stripe": "WH",
+      "gauge": "0.5 mm²",
+      "length": 900,
+      "signal": "IND L",
+      "partNumber": "FLRY-B 0.5 GN/WH",
+      "pricePerMeter": 0.26
+    },
+    {
+      "id": "w-5",
+      "ref": "W5",
+      "from": { "connector": "c-x1", "pin": 5 },
+      "to": { "connector": "c-x3", "pin": 1 },
+      "color": "BK",
+      "stripe": "",
+      "gauge": "0.75 mm²",
+      "length": 1400,
+      "signal": "GND",
+      "partNumber": "FLRY-B 0.75 BK",
+      "pricePerMeter": 0.32
+    },
+    {
+      "id": "w-6",
+      "ref": "W6",
+      "from": { "connector": "c-x1", "pin": 6 },
+      "to": { "connector": "c-x3", "pin": 2 },
+      "color": "GY",
+      "stripe": "",
+      "gauge": "0.5 mm²",
+      "length": 1400,
+      "signal": "TAIL",
+      "partNumber": "FLRY-B 0.5 GY",
+      "pricePerMeter": 0.24
+    },
+    {
+      "id": "w-7",
+      "ref": "W7",
+      "from": { "connector": "c-x1", "pin": 7 },
+      "to": { "connector": "c-x3", "pin": 3 },
+      "color": "RD",
+      "stripe": "",
+      "gauge": "0.5 mm²",
+      "length": 1400,
+      "signal": "STOP",
+      "partNumber": "FLRY-B 0.5 RD",
+      "pricePerMeter": 0.24
+    },
+    {
+      "id": "w-8",
+      "ref": "W8",
+      "from": { "connector": "c-x1", "pin": 8 },
+      "to": { "connector": "c-x3", "pin": 4 },
+      "color": "GN",
+      "stripe": "BK",
+      "gauge": "0.5 mm²",
+      "length": 1400,
+      "signal": "IND R",
+      "partNumber": "FLRY-B 0.5 GN/BK",
+      "pricePerMeter": 0.26
+    }
+  ]
+}
