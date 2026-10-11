@@ -9,11 +9,15 @@ OpenWire is a free, open-source tool to draw wire harnesses. It operates in your
 ## What OpenWire does
 
 - Add connectors with pin names, part numbers and prices.
+- Set each pin of a connector as an input or an output.
+- Add splitters (lever connectors). Set the number of inputs and the number of outputs for each input.
 - Draw wires from pin to pin with a mouse, a pen or a finger.
 - Give each wire a color, a stripe, a gauge and a length. The colors use the IEC 60757 codes, for example BK, RD and GN.
+- Change a wire to a USB cable. The drawing shows a plug at each end: USB-A, USB-B, USB-C, Micro-USB or Mini-USB.
 - See the cut list. OpenWire adds an extra length to each wire. You need this length to strip and crimp the wire.
 - See the bill of materials. OpenWire puts the parts with the same part number on one line.
-- Add a photo to each connector. The photo shows in the drawing and in the printout.
+- Add a photo to each connector and splitter. The photo shows in the drawing and in the printout.
+- Turn a photo in steps of 90° to the left or to the right, and crop it.
 - Put a background picture behind the harness, for example a photo of the vehicle or the panel.
 - Find problems in the **Checks** tab, for example a wire without a length.
 - Undo and redo all changes.
@@ -56,11 +60,31 @@ The first time that you open OpenWire, it shows an example harness. To start a n
 
 ### Add a connector
 
-1. Click **Add connector**.
+1. Click **Add** > **Connector**.
 2. In the **Properties** tab, type the name, the number of pins and the part number.
 3. Type a name for each pin.
 
 To move a connector, drag its dark bar.
+
+### Set inputs and outputs
+
+1. Click the connector.
+2. In the **Properties** tab, find the pin in the **Pins** list.
+3. In the list next to the pin name, select **Input** or **Output**.
+
+The drawing shows **IN** or **OUT** on the pin. The **Properties** tab shows the list of inputs and the list of outputs. The **Checks** tab shows a warning when a wire connects two outputs or two inputs.
+
+### Add a splitter
+
+A splitter is a lever connector. Each input connects inside to its outputs.
+
+1. Click **Add** > **Splitter**.
+2. In the **Properties** tab, set **Inputs** and **Outputs per input**.
+3. Type a name for each input and each output, for example +12V.
+
+Inputs are always on the left side. Outputs are always on the right side. Each input has a different lever color. When you change the number of inputs or outputs, the wires stay on the same input or output. If you remove a pin that has a wire, OpenWire asks before it deletes the wire.
+
+The BOM shows a splitter as one part. Splitters do not need crimp contacts.
 
 ### Add a wire
 
@@ -70,6 +94,15 @@ Use one of these procedures:
 - Click one pin. Then click the other pin. On a touch screen, touch the two pins.
 
 A new wire has no length. Type the length in the **Properties** tab. The new wire gets the color, the stripe and the gauge of the last wire.
+
+### Add a USB cable
+
+1. Draw a wire between the two pins.
+2. In the **Properties** tab, set **Type** to **USB cable**.
+3. Select the plug at each end, for example USB-A and USB-C.
+4. Type the cable length, the part number and the price.
+
+A USB cable is not in the cut list, because you do not cut it from a reel. The BOM shows it as a cable. The next wire that you draw gets the same type as the last wire.
 
 ### Change or delete an item
 
@@ -90,6 +123,15 @@ To add a photo to a connector:
 3. Select a picture. On a phone, you can also take a photo with the camera.
 
 The photo shows below the pins of the connector. To move the connector, you can also drag its photo.
+
+### Turn and crop a picture
+
+1. Select the connector or the splitter. For the background picture, click an empty area of the drawing.
+2. Below the picture, click **−90°** to turn the picture to the left, or **+90°** to turn it to the right. Click again to turn it more, for example −180° or +270°.
+3. To crop the picture, click **Crop**. Drag the frame or its corners. Then click **Apply**.
+4. To show the full picture again, click **Reset**.
+
+OpenWire does not change the picture. It keeps the turn and the crop as settings, so you can always go back to the full picture.
 
 To add a background picture:
 
@@ -180,6 +222,10 @@ OpenWire saves projects as JSON text. You can compare two versions of a file in 
 - Pin numbers start at 1.
 - Lengths are in millimeters.
 - The `images` part contains the pictures as text (data URLs). A connector refers to its photo with the `image` field. The `background` part refers to the background picture.
+- `photoRotation` and `rotation` are the turn in degrees. `photoCrop` and `crop` are fractions of the picture: `{ "x": 0.1, "y": 0, "w": 0.8, "h": 1 }`.
+- A splitter has `"kind": "splitter"`, `poles` (inputs) and `outputs` (outputs for each input). Its pins are the inputs first, then the outputs of input 1, then the outputs of input 2.
+- A pin can have `"role": "in"` or `"role": "out"`.
+- A USB cable is a wire with `"kind": "usb"`, `usbA`, `usbB` and `price`.
 - The `version` number shows the format version. This version of OpenWire opens version 1.
 
 For a full example, refer to [examples/tail-lamp-harness.openwire.json](examples/tail-lamp-harness.openwire.json).
@@ -208,7 +254,8 @@ js/canvas.js       SVG drawing, mouse and touch input, SVG export
 js/inspector.js    Properties tab
 js/tables.js       Cut list, BOM and Checks tabs
 js/report.js       Table data, CSV and HTML tables
-js/images.js       Read pictures, make them smaller, show them
+js/images.js       Read pictures, make them smaller, turn and crop them
+js/crop.js         Crop window
 js/files.js        Open, save, download and the draft copy
 examples/          Example project
 fonts/             Barlow Semi Condensed font

@@ -8,6 +8,10 @@ import {
   findConnector,
   findWire,
   makeConnector,
+  makeSplitter,
+  cleanCrop,
+  pictureView,
+  turnRotation,
   removeConnector,
   removeWire,
   serializeProject,
@@ -29,6 +33,7 @@ import {
   saveFile,
 } from './files.js';
 import { BACKGROUND_MAX_SIZE, PHOTO_MAX_SIZE, isImageFile, loadPicture, pickImageFile } from './images.js';
+import { openCropDialog } from './crop.js';
 
 const EXAMPLE_URL = 'examples/tail-lamp-harness.openwire.json';
 const isMac = /Mac|iPhone|iPad|iPod/.test(navigator.platform || navigator.userAgent);
@@ -267,6 +272,22 @@ function addConnector() {
   showTab('properties');
 }
 
+function addSplitter() {
+  const poles = 2;
+  const outputs = 2;
+  const place = canvas.placeForNewConnector(poles * outputs);
+  let created = null;
+  store.update(
+    (project) => {
+      created = makeSplitter(project, { ...place, poles, outputs });
+      project.connectors.push(created);
+    },
+    { source: 'app', structural: true },
+  );
+  store.select({ type: 'connector', id: created.id });
+  showTab('properties');
+}
+
 function duplicateSelection() {
   const sel = store.selection;
   if (sel?.type !== 'connector') return;
@@ -290,6 +311,7 @@ function deleteSelection() {
     const count = wiresOnConnector(project, c.id).length;
     store.update((p) => removeConnector(p, sel.id), { source: 'app', structural: true });
     toast(count ? `Deleted ${c.ref} and ${count} ${count === 1 ? 'wire' : 'wires'}. Undo brings them back.` : `Deleted ${c.ref}.`);
+    return;
   } else if (sel.type === 'wire') {
     const w = findWire(project, sel.id);
     if (!w) return;
@@ -327,7 +349,11 @@ function setConnectorPhoto(connectorId, picture) {
   store.update(
     (project) => {
       const target = findConnector(project, connectorId);
-      if (target) target.image = addImage(project, picture);
+      if (target) {
+        target.image = addImage(project, picture);
+        target.photoRotation = 0;
+        target.photoCrop = null;
+      }
     },
     { source: 'app', structural: true },
   );
@@ -367,7 +393,7 @@ function setBackground(picture) {
   let y;
   if (oldImage) {
     // A new picture takes the place and the width of the old picture.
-    scale = (oldImage.width * old.scale) / picture.width;
+    scale = (pictureView(oldImage, old.rotation, old.crop).width * old.scale) / picture.width;
     x = old.x;
     y = old.y;
   } else {
@@ -381,6 +407,8 @@ function setBackground(picture) {
     (project) => {
       project.background = {
         image: addImage(project, picture),
+        rotation: 0,
+        crop: null,
         x,
         y,
         scale: Math.min(20, Math.max(0.01, scale)),
@@ -411,6 +439,73 @@ function removeBackground() {
     { source: 'app', structural: true },
   );
   toast('Removed the background picture. Undo brings it back.');
+}
+
+// ---------- Turn and crop ----------
+// `target` is 'connector' (the selected connector or splitter) or 'background'.
+
+function pictureTarget(project, target) {
+  if (target === 'background') {
+    const bg = project.background;
+    const img = bg && project.images[bg.image];
+    return img ? { img, rotation: bg.rotation || 0, crop: bg.crop || null, holder: bg, keys: ['rotation', 'crop'] } : null;
+  }
+  const sel = store.selection;
+  const c = sel?.type === 'connector' ? findConnector(project, sel.id) : null;
+  const img = c && project.images[c.image];
+  return img
+    ? { img, rotation: c.photoRotation || 0, crop: c.photoCrop || null, holder: c, keys: ['photoRotation', 'photoCrop'] }
+    : null;
+}
+
+// Changes the turn or the crop. The background keeps its middle in the same place.
+function setPictureView(target, rotation, crop) {
+  store.update(
+    (project) => {
+      const t = pictureTarget(project, target);
+      if (!t) return;
+      const bg = target === 'background' ? project.background : null;
+      const before = bg && pictureView(t.img, t.rotation, t.crop);
+      t.holder[t.keys[0]] = rotation;
+      t.holder[t.keys[1]] = crop;
+      if (bg) {
+        const after = pictureView(t.img, rotation, crop);
+        // Keep the same width on the screen, and the same middle.
+        const width = before.width * bg.scale;
+        const cx = bg.x + width / 2;
+        const cy = bg.y + (before.height * bg.scale) / 2;
+        bg.scale = Math.min(20, Math.max(0.01, width / after.width));
+        bg.x = Math.round(cx - (after.width * bg.scale) / 2);
+        bg.y = Math.round(cy - (after.height * bg.scale) / 2);
+      }
+    },
+    { source: 'app', structural: true },
+  );
+}
+
+function turnPicture(el) {
+  const target = el.dataset.target;
+  const t = pictureTarget(store.project, target);
+  if (!t) return;
+  const step = Number(el.dataset.step) || 90;
+  // The crop stays on the same part of the picture, because it is kept for the original picture.
+  setPictureView(target, turnRotation(t.rotation, step), t.crop);
+}
+
+async function cropPicture(el) {
+  const target = el.dataset.target;
+  const t = pictureTarget(store.project, target);
+  if (!t) return;
+  const result = await openCropDialog(t.img, { rotation: t.rotation, crop: t.crop });
+  if (!result) return;
+  const crop = cleanCrop(result.crop);
+  setPictureView(target, t.rotation, crop);
+  toast(crop ? 'Cropped the picture. Reset brings back the full picture.' : 'Showing the full picture.');
+}
+
+function resetPicture(el) {
+  if (!pictureTarget(store.project, el.dataset.target)) return;
+  setPictureView(el.dataset.target, 0, null);
 }
 
 // A picture dropped on the page becomes the photo of the selected connector,
@@ -479,64 +574,75 @@ const commands = {
   'remove-connector-photo': removeConnectorPhoto,
   'add-background': chooseBackground,
   'remove-background': removeBackground,
+  'add-splitter': addSplitter,
+  'photo-turn': turnPicture,
+  'photo-crop': cropPicture,
+  'photo-reset': resetPicture,
   'zoom-in': () => canvas.zoomBy(1.25),
   'zoom-out': () => canvas.zoomBy(0.8),
   fit: () => canvas.fit(),
 };
 
-function run(name) {
+function run(name, el = null) {
   const command = commands[name];
-  if (command) command();
+  if (command) command(el);
 }
 
-// ---------- File menu ----------
+// ---------- Menus (File and Add) ----------
 
-const menuButton = $('file-button');
-const menu = $('file-menu');
-const menuItems = () => [...menu.querySelectorAll('[role="menuitem"]')];
+const menus = [...document.querySelectorAll('.menu')].map((root) => ({
+  button: root.querySelector('[aria-haspopup="menu"]'),
+  list: root.querySelector('.menu-list'),
+}));
+const menuItems = (m) => [...m.list.querySelectorAll('[role="menuitem"]')];
+const openMenuOf = () => menus.find((m) => !m.list.hidden) || null;
 
-function openMenu({ focusFirst = false } = {}) {
-  menu.hidden = false;
-  menuButton.setAttribute('aria-expanded', 'true');
-  if (focusFirst) menuItems()[0]?.focus();
+function openMenu(m, { focusFirst = false } = {}) {
+  closeMenu();
+  m.list.hidden = false;
+  m.button.setAttribute('aria-expanded', 'true');
+  if (focusFirst) menuItems(m)[0]?.focus();
 }
 
 function closeMenu({ returnFocus = false } = {}) {
-  if (menu.hidden) return;
-  menu.hidden = true;
-  menuButton.setAttribute('aria-expanded', 'false');
-  if (returnFocus) menuButton.focus();
+  const m = openMenuOf();
+  if (!m) return false;
+  m.list.hidden = true;
+  m.button.setAttribute('aria-expanded', 'false');
+  if (returnFocus) m.button.focus();
+  return true;
 }
 
-menuButton.addEventListener('click', () => (menu.hidden ? openMenu() : closeMenu()));
-menuButton.addEventListener('keydown', (e) => {
-  if (e.key === 'ArrowDown') {
-    e.preventDefault();
-    openMenu({ focusFirst: true });
-  }
-});
-
-menu.addEventListener('keydown', (e) => {
-  const items = menuItems();
-  const index = items.indexOf(document.activeElement);
-  if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
-    e.preventDefault();
-    const step = e.key === 'ArrowDown' ? 1 : -1;
-    items[(index + step + items.length) % items.length].focus();
-  } else if (e.key === 'Home' || e.key === 'End') {
-    e.preventDefault();
-    items[e.key === 'Home' ? 0 : items.length - 1].focus();
-  } else if (e.key === 'Escape') {
-    e.preventDefault();
-    e.stopPropagation();
-    closeMenu({ returnFocus: true });
-  } else if (e.key === 'Tab') {
-    closeMenu();
-  }
-});
+for (const m of menus) {
+  m.button.addEventListener('click', () => (m.list.hidden ? openMenu(m) : closeMenu()));
+  m.button.addEventListener('keydown', (e) => {
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      openMenu(m, { focusFirst: true });
+    }
+  });
+  m.list.addEventListener('keydown', (e) => {
+    const items = menuItems(m);
+    const index = items.indexOf(document.activeElement);
+    if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+      e.preventDefault();
+      const step = e.key === 'ArrowDown' ? 1 : -1;
+      items[(index + step + items.length) % items.length].focus();
+    } else if (e.key === 'Home' || e.key === 'End') {
+      e.preventDefault();
+      items[e.key === 'Home' ? 0 : items.length - 1].focus();
+    } else if (e.key === 'Escape') {
+      e.preventDefault();
+      e.stopPropagation();
+      closeMenu({ returnFocus: true });
+    } else if (e.key === 'Tab') {
+      closeMenu();
+    }
+  });
+}
 
 document.addEventListener('pointerdown', (e) => {
-  if (!menu.hidden && !e.target.closest('.menu')) closeMenu();
+  if (openMenuOf() && !e.target.closest('.menu')) closeMenu();
 });
 
 // One click handler runs every button that has data-cmd.
@@ -544,7 +650,7 @@ document.addEventListener('click', (e) => {
   const el = e.target.closest('[data-cmd]');
   if (!el || el.disabled) return;
   if (el.closest('.menu-list')) closeMenu();
-  run(el.dataset.cmd);
+  run(el.dataset.cmd, el);
 });
 
 // ---------- Keyboard ----------
@@ -594,7 +700,7 @@ document.addEventListener('keydown', (e) => {
   }
 
   if (key === 'Escape') {
-    if (!menu.hidden) closeMenu({ returnFocus: true });
+    if (closeMenu({ returnFocus: true })) e.preventDefault();
     else if (canvas.cancelPending()) e.preventDefault();
     else if (!editable && store.selection) store.select(null);
     return;

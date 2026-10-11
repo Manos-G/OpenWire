@@ -4,6 +4,35 @@
 export const FORMAT = 'openwire';
 export const FORMAT_VERSION = 1;
 export const MAX_PINS = 200;
+export const MAX_POLES = 8;
+export const MAX_OUTPUTS = 12;
+
+// A pin can be an input, an output, or not set ('').
+export const PIN_ROLES = [
+  { code: '', name: 'Not set' },
+  { code: 'in', name: 'Input' },
+  { code: 'out', name: 'Output' },
+];
+
+// Lever colors of the splitter, one for each input.
+export const SPLITTER_COLORS = ['BU', 'OG', 'GN', 'RD', 'VT', 'YE', 'BN', 'GY'];
+
+// USB plug types for the ends of a USB cable.
+export const USB_TYPES = [
+  { code: 'A', name: 'USB-A' },
+  { code: 'B', name: 'USB-B' },
+  { code: 'C', name: 'USB-C' },
+  { code: 'MICRO', name: 'Micro-USB' },
+  { code: 'MINI', name: 'Mini-USB' },
+];
+
+export function usbName(code) {
+  return USB_TYPES.find((t) => t.code === code)?.name || code || '';
+}
+
+export const isSplitter = (c) => c?.kind === 'splitter';
+export const isUsb = (w) => w?.kind === 'usb';
+export const componentNoun = (c) => (isSplitter(c) ? 'splitter' : 'connector');
 
 // Wire insulation colors with IEC 60757 codes.
 export const WIRE_COLORS = [
@@ -110,6 +139,7 @@ export function nextRef(items, prefix) {
 export function makeConnector(project, { x = 0, y = 0, pinCount = 4 } = {}) {
   return {
     id: newId('c'),
+    kind: 'connector',
     ref: nextRef(project.connectors, 'X'),
     x,
     y,
@@ -120,8 +150,103 @@ export function makeConnector(project, { x = 0, y = 0, pinCount = 4 } = {}) {
     contactPartNumber: '',
     contactPrice: 0,
     image: '',
-    pins: Array.from({ length: clampInt(pinCount, 1, MAX_PINS) }, () => ({ label: '' })),
+    photoRotation: 0,
+    photoCrop: null,
+    pins: Array.from({ length: clampInt(pinCount, 1, MAX_PINS) }, () => ({ label: '', role: '' })),
   };
+}
+
+// ---------- Splitters ----------
+// A splitter has one or more inputs. Each input connects inside to the same
+// number of outputs, like a lever splitter.
+// Pin numbers: first the inputs (1 to P), then the outputs of input 1,
+// then the outputs of input 2, and so on.
+
+export function splitterPinCount(poles, outputs) {
+  return poles + poles * outputs;
+}
+
+export function splitterPin(c, pin) {
+  const P = c.poles;
+  const M = c.outputs;
+  if (pin <= P) return { role: 'in', pole: pin - 1, index: 0 };
+  const k = pin - P - 1;
+  return { role: 'out', pole: Math.floor(k / M), index: k % M };
+}
+
+function splitterPinNumber(poles, outputs, info) {
+  if (info.role === 'in') return info.pole < poles ? info.pole + 1 : null;
+  if (info.pole >= poles || info.index >= outputs) return null;
+  return poles + info.pole * outputs + info.index + 1;
+}
+
+export function makeSplitter(project, { x = 0, y = 0, poles = 2, outputs = 2 } = {}) {
+  const P = clampInt(poles, 1, MAX_POLES);
+  const M = clampInt(outputs, 1, MAX_OUTPUTS);
+  return {
+    id: newId('c'),
+    kind: 'splitter',
+    ref: nextRef(project.connectors, 'S'),
+    x,
+    y,
+    poles: P,
+    outputs: M,
+    partNumber: '',
+    manufacturer: '',
+    description: `Lever splitter, ${P} in, ${P * M} out`,
+    price: 0,
+    contactPartNumber: '',
+    contactPrice: 0,
+    image: '',
+    photoRotation: 0,
+    photoCrop: null,
+    pins: Array.from({ length: splitterPinCount(P, M) }, (_, i) => ({
+      label: '',
+      role: i < P ? 'in' : 'out',
+    })),
+  };
+}
+
+// Wires that lose their pin when the splitter size changes.
+export function wiresRemovedBySplitterSize(project, id, poles, outputs) {
+  const c = findConnector(project, id);
+  if (!c) return [];
+  const lost = (end) => end.connector === id && splitterPinNumber(poles, outputs, splitterPin(c, end.pin)) === null;
+  return project.wires.filter((w) => lost(w.from) || lost(w.to));
+}
+
+// Changes the number of inputs and outputs. Wires stay on the same input or
+// output. Wires on removed pins are deleted.
+export function setSplitterSize(project, id, poles, outputs) {
+  const c = findConnector(project, id);
+  if (!c || !isSplitter(c)) return;
+  const P = clampInt(poles, 1, MAX_POLES);
+  const M = clampInt(outputs, 1, MAX_OUTPUTS);
+  const map = new Map();
+  for (let pin = 1; pin <= c.pins.length; pin += 1) {
+    map.set(pin, splitterPinNumber(P, M, splitterPin(c, pin)));
+  }
+  const pins = Array.from({ length: splitterPinCount(P, M) }, (_, i) => ({ label: '', role: i < P ? 'in' : 'out' }));
+  for (const [oldPin, newPin] of map) {
+    if (newPin) pins[newPin - 1].label = c.pins[oldPin - 1]?.label || '';
+  }
+  project.wires = project.wires.filter((w) => {
+    for (const end of [w.from, w.to]) {
+      if (end.connector !== id) continue;
+      const next = map.get(end.pin);
+      if (!next) return false;
+      end.pin = next;
+    }
+    return true;
+  });
+  c.poles = P;
+  c.outputs = M;
+  c.pins = pins;
+}
+
+export function pinRole(c, pin) {
+  if (isSplitter(c)) return splitterPin(c, pin).role;
+  return c?.pins[pin - 1]?.role || '';
 }
 
 // A new wire copies color, gauge and price from the template (the last wire),
@@ -129,6 +254,7 @@ export function makeConnector(project, { x = 0, y = 0, pinCount = 4 } = {}) {
 export function makeWire(project, from, to, template = null) {
   return {
     id: newId('w'),
+    kind: isUsb(template) ? 'usb' : 'wire',
     ref: nextRef(project.wires, 'W'),
     from: { connector: from.connector, pin: from.pin },
     to: { connector: to.connector, pin: to.pin },
@@ -139,6 +265,9 @@ export function makeWire(project, from, to, template = null) {
     signal: '',
     partNumber: '',
     pricePerMeter: template ? numberOr(template.pricePerMeter, 0) : 0,
+    usbA: template?.usbA || 'A',
+    usbB: template?.usbB || 'C',
+    price: template ? numberOr(template.price, 0) : 0,
   };
 }
 
@@ -188,7 +317,7 @@ export function duplicateConnector(project, connectorId) {
   const copy = {
     ...structuredClone(source),
     id: newId('c'),
-    ref: nextRef(project.connectors, 'X'),
+    ref: nextRef(project.connectors, isSplitter(source) ? 'S' : 'X'),
     x: source.x + 40,
     y: source.y + 40,
   };
@@ -212,7 +341,7 @@ export function setPinCount(project, connectorId, count) {
   const n = clampInt(count, 1, MAX_PINS);
   const removed = new Set(wiresRemovedByPinCount(project, connectorId, n).map((w) => w.id));
   project.wires = project.wires.filter((w) => !removed.has(w.id));
-  while (connector.pins.length < n) connector.pins.push({ label: '' });
+  while (connector.pins.length < n) connector.pins.push({ label: '', role: '' });
   connector.pins.length = n;
   return removed.size;
 }
@@ -255,24 +384,66 @@ export function referencedImages(project) {
   return ids;
 }
 
+// A picture can be turned in steps of 90 degrees and cropped. The picture
+// data does not change: OpenWire keeps the turn and the crop as settings.
+// `rotation` is in degrees, -270 to 270 (positive turns to the right).
+// `crop` is { x, y, w, h } as fractions of the original picture, or null.
+
+export function normalRotation(rotation) {
+  const r = Math.round(numberOr(rotation, 0) / 90) * 90;
+  return ((r % 360) + 360) % 360;
+}
+
+export function turnRotation(rotation, step) {
+  const r = Math.round((numberOr(rotation, 0) + step) / 90) * 90;
+  return r % 360 === 0 ? 0 : r % 360;
+}
+
+export function cleanCrop(crop) {
+  if (!crop || typeof crop !== 'object') return null;
+  const x = Math.min(0.99, Math.max(0, numberOr(crop.x, 0)));
+  const y = Math.min(0.99, Math.max(0, numberOr(crop.y, 0)));
+  const w = Math.min(1 - x, Math.max(0.01, numberOr(crop.w, 1)));
+  const h = Math.min(1 - y, Math.max(0.01, numberOr(crop.h, 1)));
+  if (x < 0.001 && y < 0.001 && w > 0.999 && h > 0.999) return null;
+  return { x: round4(x), y: round4(y), w: round4(w), h: round4(h) };
+}
+
+function round4(v) {
+  return Math.round(v * 10000) / 10000;
+}
+
+// The visible part of a picture, in pixels of the original picture,
+// and its size after the turn.
+export function pictureView(img, rotation = 0, crop = null) {
+  const c = crop || { x: 0, y: 0, w: 1, h: 1 };
+  const cx = c.x * img.width;
+  const cy = c.y * img.height;
+  const cw = c.w * img.width;
+  const ch = c.h * img.height;
+  const r = normalRotation(rotation);
+  const turned = r === 90 || r === 270;
+  return { cx, cy, cw, ch, r, width: turned ? ch : cw, height: turned ? cw : ch };
+}
+
 // Size of the background picture in drawing units.
 export function backgroundRect(project) {
   const bg = project.background;
   const img = findImage(project, bg?.image);
   if (!bg || !img) return null;
-  const width = img.width * bg.scale;
-  return { x: bg.x, y: bg.y, width, height: (width * img.height) / img.width };
+  const view = pictureView(img, bg.rotation, bg.crop);
+  return { x: bg.x, y: bg.y, width: view.width * bg.scale, height: view.height * bg.scale };
 }
 
 // ---------- Calculations ----------
 
 export function cutLength(project, wire) {
-  if (!isPositive(wire.length)) return null;
+  if (isUsb(wire) || !isPositive(wire.length)) return null;
   return wire.length + Math.max(0, numberOr(project.settings.cutMargin, 0));
 }
 
 export function cutList(project) {
-  return [...project.wires].sort(byRef).map((w) => ({
+  return cutWires(project).sort(byRef).map((w) => ({
     id: w.id,
     ref: w.ref,
     from: endLabel(project, w.from),
@@ -283,6 +454,15 @@ export function cutList(project) {
     length: isPositive(w.length) ? w.length : null,
     cutLength: cutLength(project, w),
   }));
+}
+
+// Wires that you cut from a reel. USB cables are bought as complete cables.
+export function cutWires(project) {
+  return project.wires.filter((w) => !isUsb(w));
+}
+
+export function usbCables(project) {
+  return project.wires.filter(isUsb);
 }
 
 export function totalWireLength(project) {
@@ -306,9 +486,10 @@ export function billOfMaterials(project) {
   const connectors = [...project.connectors].sort(byRef);
   for (const c of connectors) {
     const pn = c.partNumber.trim();
+    const type = isSplitter(c) ? 'Splitter' : 'Connector';
     add(
-      pn ? `connector:${pn}` : `connector:#${c.id}`,
-      { type: 'Connector', partNumber: pn, manufacturer: c.manufacturer, description: c.description, unit: 'pcs' },
+      pn ? `${type}:${pn}` : `${type}:#${c.id}`,
+      { type, partNumber: pn, manufacturer: c.manufacturer, description: c.description, unit: 'pcs' },
       1,
       numberOr(c.price, 0),
       c.ref,
@@ -316,6 +497,7 @@ export function billOfMaterials(project) {
   }
 
   for (const c of connectors) {
+    if (isSplitter(c)) continue;
     const pn = c.contactPartNumber.trim();
     const count = usedPins(project, c.id).size;
     if (!pn || !count) continue;
@@ -328,7 +510,7 @@ export function billOfMaterials(project) {
     );
   }
 
-  for (const w of [...project.wires].sort(byRef)) {
+  for (const w of cutWires(project).sort(byRef)) {
     const pn = w.partNumber.trim();
     const meters = (cutLength(project, w) || 0) / 1000;
     add(
@@ -342,6 +524,24 @@ export function billOfMaterials(project) {
       },
       meters,
       numberOr(w.pricePerMeter, 0),
+      w.ref,
+    );
+  }
+
+  for (const w of usbCables(project).sort(byRef)) {
+    const pn = w.partNumber.trim();
+    const length = isPositive(w.length) ? `, ${w.length} mm` : '';
+    add(
+      pn ? `usb:${pn}` : `usb:${w.usbA}|${w.usbB}|${w.length}`,
+      {
+        type: 'Cable',
+        partNumber: pn,
+        manufacturer: '',
+        description: `USB cable, ${usbName(w.usbA)} to ${usbName(w.usbB)}${length}`,
+        unit: 'pcs',
+      },
+      1,
+      numberOr(w.price, 0),
       w.ref,
     );
   }
@@ -383,6 +583,14 @@ export function runChecks(project) {
       add('warning', `${c.ref} has no wires.`, target);
       continue;
     }
+    if (isSplitter(c)) {
+      for (let p = 1; p <= c.poles; p += 1) {
+        if (!used.has(p)) continue;
+        const outs = Array.from({ length: c.outputs }, (_, k) => c.poles + (p - 1) * c.outputs + k + 1);
+        if (!outs.some((n) => used.has(n))) add('warning', `Input ${p} of ${c.ref} has no output wires.`, target);
+      }
+      continue;
+    }
     const unused = c.pins.map((_, i) => i + 1).filter((n) => !used.has(n));
     if (unused.length) {
       const list = unused.length > 8 ? `${unused.slice(0, 8).join(', ')} and more` : unused.join(', ');
@@ -394,8 +602,17 @@ export function runChecks(project) {
 
   for (const w of [...project.wires].sort(byRef)) {
     const target = { type: 'wire', id: w.id };
-    if (!isPositive(w.length)) add('error', `${w.ref} has no length.`, target);
-    if (!String(w.gauge || '').trim()) add('warning', `${w.ref} has no gauge.`, target);
+    if (isUsb(w)) {
+      if (!isPositive(w.length)) add('info', `USB cable ${w.ref} has no length.`, target);
+    } else {
+      if (!isPositive(w.length)) add('error', `${w.ref} has no length.`, target);
+      if (!String(w.gauge || '').trim()) add('warning', `${w.ref} has no gauge.`, target);
+    }
+    const roleA = pinRole(findConnector(project, w.from.connector), w.from.pin);
+    const roleB = pinRole(findConnector(project, w.to.connector), w.to.pin);
+    if (roleA && roleA === roleB) {
+      add('warning', `${w.ref} connects two ${roleA === 'in' ? 'inputs' : 'outputs'}.`, target);
+    }
     if (w.from.connector === w.to.connector && w.from.pin === w.to.pin) {
       add('warning', `${w.ref} connects a pin to the same pin.`, target);
     }
@@ -465,6 +682,8 @@ export function normalizeProject(raw) {
   if (bg && imageOrEmpty(bg.image)) {
     project.background = {
       image: bg.image,
+      rotation: turnRotation(bg.rotation, 0),
+      crop: cleanCrop(bg.crop),
       x: numberOr(bg.x, 0),
       y: numberOr(bg.y, 0),
       scale: Math.min(20, Math.max(0.01, numberOr(bg.scale, 1))),
@@ -478,13 +697,29 @@ export function normalizeProject(raw) {
     if (!c || typeof c !== 'object') continue;
     let id = str(c.id);
     if (!id || connectorIds.has(id)) id = newId('c');
-    const pins = arr(c.pins)
-      .slice(0, MAX_PINS)
-      .map((p) => ({ label: str(p?.label) }));
-    if (!pins.length) pins.push({ label: '' });
+    const splitter = c.kind === 'splitter';
+    const roleOf = (p) => (PIN_ROLES.some((r) => r.code === p?.role) ? p.role : '');
+    let pins;
+    let extra = {};
+    if (splitter) {
+      const P = clampInt(c.poles, 1, MAX_POLES);
+      const M = clampInt(c.outputs, 1, MAX_OUTPUTS);
+      pins = Array.from({ length: splitterPinCount(P, M) }, (_, i) => ({
+        label: str(arr(c.pins)[i]?.label),
+        role: i < P ? 'in' : 'out',
+      }));
+      extra = { poles: P, outputs: M };
+    } else {
+      pins = arr(c.pins)
+        .slice(0, MAX_PINS)
+        .map((p) => ({ label: str(p?.label), role: roleOf(p) }));
+      if (!pins.length) pins.push({ label: '', role: '' });
+    }
     const connector = {
       id,
-      ref: str(c.ref, 'X?'),
+      kind: splitter ? 'splitter' : 'connector',
+      ...extra,
+      ref: str(c.ref, splitter ? 'S?' : 'X?'),
       x: numberOr(c.x, 0),
       y: numberOr(c.y, 0),
       partNumber: str(c.partNumber),
@@ -494,6 +729,8 @@ export function normalizeProject(raw) {
       contactPartNumber: str(c.contactPartNumber),
       contactPrice: numberOr(c.contactPrice, 0),
       image: imageOrEmpty(c.image),
+      photoRotation: turnRotation(c.photoRotation, 0),
+      photoCrop: cleanCrop(c.photoCrop),
       pins,
     };
     connectorIds.set(id, connector);
@@ -520,6 +757,7 @@ export function normalizeProject(raw) {
     const length = numberOr(w.length, null);
     project.wires.push({
       id,
+      kind: w.kind === 'usb' ? 'usb' : 'wire',
       ref: str(w.ref, 'W?'),
       from,
       to,
@@ -530,6 +768,9 @@ export function normalizeProject(raw) {
       signal: str(w.signal),
       partNumber: str(w.partNumber),
       pricePerMeter: numberOr(w.pricePerMeter, 0),
+      usbA: USB_TYPES.some((t) => t.code === w.usbA) ? w.usbA : 'A',
+      usbB: USB_TYPES.some((t) => t.code === w.usbB) ? w.usbB : 'C',
+      price: numberOr(w.price, 0),
     });
   }
 

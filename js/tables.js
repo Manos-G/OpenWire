@@ -1,7 +1,7 @@
 // Cut list, bill of materials and checks.
 // The panels draw again after each change. The drawing selection is marked in the cut list.
 
-import { billOfMaterials, isPositive, runChecks, totalWireLength } from './model.js';
+import { billOfMaterials, cutWires, isPositive, runChecks, totalWireLength } from './model.js';
 import { bomTable, cutListTable, escapeHtml as esc, formatMeters, formatMoney, tableHtml } from './report.js';
 
 const LEVEL_NAMES = { error: 'Error', warning: 'Warning', info: 'Note' };
@@ -20,8 +20,9 @@ export function createTables(panels, store, { badge, onSelect }) {
 
   function renderCutList() {
     const p = store.project;
-    const count = p.wires.length;
-    const missing = p.wires.filter((w) => !isPositive(w.length)).length;
+    const wires = cutWires(p);
+    const count = wires.length;
+    const missing = wires.filter((w) => !isPositive(w.length)).length;
     let summary = 'No wires yet';
     if (count) {
       summary = `<strong>${plural(count, 'wire', 'wires')}</strong>, <strong>${formatMeters(totalWireLength(p))} m</strong> to cut`;

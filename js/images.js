@@ -4,6 +4,8 @@
 // so the project stays one file. Large photos are made smaller first:
 // a phone photo of 4 MB becomes approximately 100 to 300 kB.
 
+import { pictureView } from './model.js';
+
 export const PHOTO_MAX_SIZE = 900; // Connector photos, longest side in pixels.
 export const BACKGROUND_MAX_SIZE = 2400; // Background pictures, longest side in pixels.
 const MAX_FILE_BYTES = 40 * 1024 * 1024;
@@ -139,4 +141,83 @@ export function formatBytes(bytes) {
 // Approximate size of a picture in the project file.
 export function pictureBytes(image) {
   return image?.data ? Math.round((image.data.length * 3) / 4) : 0;
+}
+
+// ---------- Turn and crop ----------
+// A picture is drawn inside its own small SVG. The viewBox is the visible part
+// after the turn. The transform turns the picture and moves the crop into view.
+
+
+function viewTransform(v) {
+  const move = `translate(${-v.cx} ${-v.cy})`;
+  if (v.r === 90) return `translate(${v.ch} 0) rotate(90) ${move}`;
+  if (v.r === 180) return `translate(${v.cw} ${v.ch}) rotate(180) ${move}`;
+  if (v.r === 270) return `translate(0 ${v.cw}) rotate(270) ${move}`;
+  return move;
+}
+
+const attr = (value) => String(value).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
+const r2 = (n) => Math.round(n * 100) / 100;
+
+// The <image> element with the turn and the crop. `id` goes into data-image,
+// so the SVG export can put the full picture data in the file.
+function imageTag(img, view, id) {
+  return `<image${id ? ` data-image="${attr(id)}"` : ''} href="${attr(pictureUrl(img))}" x="0" y="0" width="${img.width}" height="${img.height}"
+    transform="${viewTransform(view)}" preserveAspectRatio="none"/>`;
+}
+
+// A nested SVG for the drawing, at a position and size in drawing units.
+export function pictureSvg(img, { id = '', rotation = 0, crop = null, x, y, width, height, fit = 'xMidYMid meet' }) {
+  const view = pictureView(img, rotation, crop);
+  return `<svg x="${r2(x)}" y="${r2(y)}" width="${r2(width)}" height="${r2(height)}" viewBox="0 0 ${r2(view.width)} ${r2(view.height)}"
+    preserveAspectRatio="${fit}" overflow="hidden">${imageTag(img, view, id)}</svg>`;
+}
+
+// A standalone SVG for the Properties panel and the crop window.
+export function pictureElement(img, { rotation = 0, crop = null, className = '', label = '' } = {}) {
+  const view = pictureView(img, rotation, crop);
+  return `<svg class="${className}" viewBox="0 0 ${r2(view.width)} ${r2(view.height)}" preserveAspectRatio="xMidYMid meet"
+    role="img" aria-label="${attr(label)}">${imageTag(img, view, '')}</svg>`;
+}
+
+// Converts a crop between the original picture and the turned picture
+// that you see. Values are in pixels.
+export function cropToView(img, rotation, crop) {
+  const c = crop || { x: 0, y: 0, w: 1, h: 1 };
+  const W = img.width;
+  const H = img.height;
+  const x = c.x * W;
+  const y = c.y * H;
+  const w = c.w * W;
+  const h = c.h * H;
+  switch (pictureView(img, rotation).r) {
+    case 90:
+      return { x: H - y - h, y: x, w: h, h: w };
+    case 180:
+      return { x: W - x - w, y: H - y - h, w, h };
+    case 270:
+      return { x: y, y: W - x - w, w: h, h: w };
+    default:
+      return { x, y, w, h };
+  }
+}
+
+export function cropFromView(img, rotation, rect) {
+  const W = img.width;
+  const H = img.height;
+  let o;
+  switch (pictureView(img, rotation).r) {
+    case 90:
+      o = { x: rect.y, y: H - rect.x - rect.w, w: rect.h, h: rect.w };
+      break;
+    case 180:
+      o = { x: W - rect.x - rect.w, y: H - rect.y - rect.h, w: rect.w, h: rect.h };
+      break;
+    case 270:
+      o = { x: W - rect.y - rect.h, y: rect.x, w: rect.h, h: rect.w };
+      break;
+    default:
+      o = { ...rect };
+  }
+  return { x: o.x / W, y: o.y / H, w: o.w / W, h: o.h / H };
 }

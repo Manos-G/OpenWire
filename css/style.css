@@ -1179,15 +1179,17 @@ p {
   background: #ffffff;
 }
 
-.photo-preview img {
+.photo-preview img,
+.photo-preview .photo-svg {
   display: block;
   width: 100%;
-  max-height: 220px;
+  height: 220px;
   object-fit: contain;
 }
 
-.photo-preview.is-small img {
-  max-height: 120px;
+.photo-preview.is-small img,
+.photo-preview.is-small .photo-svg {
+  height: 130px;
 }
 
 .photo-actions {
@@ -1231,4 +1233,158 @@ p {
   height: 18px;
   margin: 0;
   accent-color: var(--ink);
+}
+
+.photo-tools {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 8px 0 2px;
+}
+
+.icon-text svg {
+  width: 17px;
+  height: 17px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.7;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+/* ---------- Add menu ---------- */
+
+.caret {
+  width: 12px;
+  height: 12px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.menu-note {
+  font-size: 13px;
+  color: var(--ink-muted);
+}
+
+/* ---------- Pins, inputs and outputs ---------- */
+
+.pin-row.has-role {
+  grid-template-columns: 30px minmax(0, 1fr) 92px minmax(0, 0.55fr);
+}
+
+.pin-role {
+  padding-left: 6px;
+  padding-right: 4px;
+}
+
+.pin-lists .outputs {
+  margin-top: 0;
+}
+
+.pin-group-title {
+  margin: 10px 0 4px;
+  font-size: 14px;
+  color: var(--ink-muted);
+}
+
+.lever-dot {
+  display: inline-block;
+  width: 10px;
+  height: 18px;
+  border-radius: 3px;
+  background: var(--swatch);
+  vertical-align: middle;
+}
+
+/* ---------- Crop window ---------- */
+
+.crop-dialog {
+  width: min(94vw, 760px);
+  max-height: 94vh;
+  padding: 0;
+  border: 1px solid var(--rule-strong);
+  border-radius: 8px;
+  background: var(--chrome);
+  color: var(--ink);
+  box-shadow: var(--shadow);
+}
+
+.crop-dialog::backdrop {
+  background: rgba(15, 22, 30, 0.55);
+}
+
+.crop-form {
+  display: grid;
+  gap: 10px;
+  padding: 16px;
+}
+
+.crop-title {
+  font-size: 19px;
+  font-weight: 600;
+}
+
+.crop-help,
+.crop-size {
+  color: var(--ink-muted);
+  font-size: 14px;
+}
+
+.crop-stage {
+  display: grid;
+  place-items: center;
+  padding: 10px;
+  border-radius: var(--radius);
+  background: #1d2833;
+}
+
+.crop-svg {
+  display: block;
+  width: 100%;
+  height: min(60vh, 480px);
+  touch-action: none;
+  overflow: visible;
+}
+
+.crop-shade {
+  fill: rgba(10, 14, 20, 0.6);
+  pointer-events: none;
+}
+
+.crop-frame {
+  fill: transparent;
+  stroke: #f2c12e;
+  stroke-width: 2;
+  vector-effect: non-scaling-stroke;
+  cursor: move;
+}
+
+.crop-handle {
+  fill: #f2c12e;
+  stroke: #26323f;
+  stroke-width: 1;
+  vector-effect: non-scaling-stroke;
+}
+
+.crop-handle[data-drag='nw'],
+.crop-handle[data-drag='se'] {
+  cursor: nwse-resize;
+}
+
+.crop-handle[data-drag='ne'],
+.crop-handle[data-drag='sw'] {
+  cursor: nesw-resize;
+}
+
+.crop-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.crop-spacer {
+  flex: 1;
 }

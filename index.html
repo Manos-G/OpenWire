@@ -50,7 +50,15 @@
         <button type="button" class="icon-button" data-cmd="redo" aria-label="Redo" data-tip="Redo" data-keys="Ctrl+Shift+Z" disabled>
           <svg viewBox="0 0 20 20" aria-hidden="true"><path d="m12.5 5 4 4-4 4" /><path d="M16 9H8a4.5 4.5 0 0 0 0 9h3" /></svg>
         </button>
-        <button type="button" class="button primary" data-cmd="add-connector">Add connector</button>
+        <div class="menu">
+          <button type="button" class="button primary" id="add-button" aria-haspopup="menu" aria-expanded="false" aria-controls="add-menu">
+            Add <svg class="caret" viewBox="0 0 12 12" aria-hidden="true"><path d="m3 4.5 3 3 3-3"/></svg>
+          </button>
+          <div class="menu-list" id="add-menu" role="menu" aria-labelledby="add-button" hidden>
+            <button type="button" role="menuitem" data-cmd="add-connector">Connector <span class="menu-note">pins in a row</span></button>
+            <button type="button" role="menuitem" data-cmd="add-splitter">Splitter <span class="menu-note">inputs to outputs</span></button>
+          </div>
+        </div>
       </nav>
 
       <div class="doc" aria-live="polite">
