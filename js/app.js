@@ -34,12 +34,16 @@ import {
 } from './files.js';
 import { BACKGROUND_MAX_SIZE, PHOTO_MAX_SIZE, isImageFile, loadPicture, pickImageFile } from './images.js';
 import { openCropDialog } from './crop.js';
+import { VERSION } from './version.js';
 
 const EXAMPLE_URL = 'examples/tail-lamp-harness.openwire.json';
 const isMac = /Mac|iPhone|iPad|iPod/.test(navigator.platform || navigator.userAgent);
 const $ = (id) => document.getElementById(id);
 
 document.documentElement.classList.add('is-loading');
+
+const versionEl = document.getElementById('app-version');
+if (versionEl) versionEl.textContent = `v${VERSION}`;
 
 const store = createStore(createProject());
 const canvasWrap = $('canvas');
@@ -258,18 +262,18 @@ const baseName = () => fileBaseName(store.project.meta.name);
 // ---------- Editing commands ----------
 
 function addConnector() {
-  const pinCount = 4;
-  const place = canvas.placeForNewConnector(pinCount);
+  const place = canvas.placeForNewConnector(1);
   let created = null;
   store.update(
     (project) => {
-      created = makeConnector(project, { ...place, pinCount });
+      created = makeConnector(project, place);
       project.connectors.push(created);
     },
     { source: 'app', structural: true },
   );
   store.select({ type: 'connector', id: created.id });
   showTab('properties');
+  toast(`Added ${created.ref}. Add pins to its sides in Properties.`);
 }
 
 function addSplitter() {

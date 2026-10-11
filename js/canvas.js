@@ -1,161 +1,33 @@
 // Drawing area. Renders the harness as SVG and handles mouse, pen and touch input.
+// layout.js gives the size and pin positions. draw.js gives the SVG markup.
 
-import {
-  SPLITTER_COLORS,
-  backgroundRect,
-  colorInfo,
-  findConnector,
-  findImage,
-  findWire,
-  isPositive,
-  isSplitter,
-  isUsb,
-  makeWire,
-  pictureView,
-  serializeProject,
-  splitterPin,
-} from './model.js';
-import { escapeHtml as esc, formatLength } from './report.js';
+import { backgroundRect, findConnector, findImage, findWire, makeWire, serializeProject } from './model.js';
+import { escapeHtml as esc } from './report.js';
 import { pictureSvg } from './images.js';
+import { BOX_W, HEAD_H, ROW_H, layoutComponent, pinAnchor } from './layout.js';
+import { DIAGRAM_CSS, cablePath, connectorMarkup, labelMarkup, splitterMarkup, wireMarkup } from './draw.js';
 
-export const BOX_W = 176;
-export const HEAD_H = 30;
-export const ROW_H = 22;
-const NUM_W = 26;
-const PHOTO_PAD = 6;
-const PHOTO_MAX_H = 150;
+export { DIAGRAM_CSS };
+
 const SNAP = 10;
 const MIN_ZOOM = 0.2;
 const MAX_ZOOM = 4;
 const SVG_NS = 'http://www.w3.org/2000/svg';
 export const DATA_NS = 'https://github.com/Manos-G/OpenWire';
 
-const FONT = "'Barlow Semi Condensed', 'Bahnschrift', 'Roboto Condensed', 'Arial Narrow', sans-serif";
-
-// Styles for the drawing. The exported SVG contains the same styles,
-// so a drawing looks the same in other programs.
-export const DIAGRAM_CSS = `
-.ow text { font-family: ${FONT}; }
-.ow-head { fill: #26323f; }
-.ow-ref { fill: #ffffff; font-size: 14px; font-weight: 600; }
-.ow-pn { fill: #b9c6d3; font-size: 11px; }
-.ow-body { fill: #ffffff; stroke: #26323f; stroke-width: 1.25; }
-.ow-numcol { fill: #eef2f5; }
-.ow-row-bg { fill: #ffffff; fill-opacity: 0; }
-.ow-row-line { stroke: #d8e0e7; stroke-width: 1; }
-.ow-pin-num { fill: #52606d; font-size: 11px; text-anchor: middle; font-variant-numeric: tabular-nums; }
-.ow-pin-label { fill: #1d2833; font-size: 12px; }
-.ow-anchor { fill: #ffffff; stroke: #8795a3; stroke-width: 1.1; }
-.ow-anchor.is-used { fill: #26323f; stroke: #26323f; }
-.ow-wire-outline { fill: none; stroke: #1d2833; stroke-width: 5; stroke-linecap: round; }
-.ow-wire-core { fill: none; stroke-width: 3; stroke-linecap: round; }
-.ow-wire-stripe { fill: none; stroke-width: 1.5; stroke-dasharray: 6 6; }
-.ow-label-bg { fill: #ffffff; stroke: #c3ccd5; stroke-width: 0.75; }
-.ow-label { fill: #1d2833; font-size: 11px; font-variant-numeric: tabular-nums; }
-.ow-label-ref { font-weight: 600; }
-.ow-sel { fill: none; stroke: #f2c12e; stroke-opacity: 0.7; stroke-linecap: round; stroke-linejoin: round; }
-.ow-title { fill: #52606d; font-size: 12px; }
-.ow-photo-line { stroke: #d8e0e7; stroke-width: 1; }
-.ow-photo-bg { fill: #f6f8fa; }
-.ow-role { font-size: 9px; font-weight: 600; text-anchor: end; letter-spacing: 0.04em; }
-.ow-role-in { fill: #1f5fbf; }
-.ow-role-out { fill: #b35c0a; }
-.ow-split-body { fill: #e3e6e9; stroke: #26323f; stroke-width: 1.25; }
-.ow-split-sep { stroke: #c4cad0; stroke-width: 1; }
-.ow-lever { stroke: rgba(0, 0, 0, 0.25); stroke-width: 0.75; }
-.ow-lever-mark { fill: none; stroke: rgba(255, 255, 255, 0.55); stroke-width: 1.2; stroke-linecap: round; }
-.ow-bus { fill: none; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; }
-.ow-lever-text { font-size: 9.5px; font-weight: 600; }
-.ow-usb-outline { fill: none; stroke: #111518; stroke-width: 7; stroke-linecap: round; }
-.ow-usb-core { fill: none; stroke: #3a4148; stroke-width: 4.5; stroke-linecap: round; }
-.ow-usb-shine { fill: none; stroke: #6b747d; stroke-width: 1; stroke-linecap: round; }
-.ow-plug-shell { fill: #c9ced3; stroke: #5d656d; stroke-width: 0.8; }
-.ow-plug-boot { fill: #2b3137; stroke: #111518; stroke-width: 0.8; }
-.ow-plug-text { fill: #ffffff; font-size: 8.5px; font-weight: 600; text-anchor: middle; }
-`;
-
 const round = (v) => Math.round(v * 10) / 10;
 const clamp = (v, min, max) => Math.min(max, Math.max(min, v));
 const snap = (v) => Math.round(v / SNAP) * SNAP;
-const truncate = (text, max) => (text.length > max ? `${text.slice(0, max - 1)}…` : text);
 
-// Number of rows: one for each pin, or one for each output of a splitter.
-function rowCount(c) {
-  return isSplitter(c) ? c.poles * c.outputs : c.pins.length;
-}
-
-// Size of the photo below the pins, or null when there is no photo.
-function photoBox(c, project) {
-  const img = project ? findImage(project, c.image) : null;
-  if (!img) return null;
-  const view = pictureView(img, c.photoRotation, c.photoCrop);
-  const width = BOX_W - PHOTO_PAD * 2;
-  const height = Math.round(Math.min(PHOTO_MAX_H, (width * view.height) / view.width));
-  return { img, x: PHOTO_PAD, y: HEAD_H + rowCount(c) * ROW_H + PHOTO_PAD, width, height };
-}
-
-export function connectorHeight(c, project = null) {
-  const photo = photoBox(c, project);
-  return HEAD_H + rowCount(c) * ROW_H + (photo ? photo.height + PHOTO_PAD * 2 : 0);
-}
-
-// Vertical middle of a pin, from the top of the component.
-function pinY(c, pin) {
-  if (!isSplitter(c)) return HEAD_H + (pin - 0.5) * ROW_H;
-  const s = splitterPin(c, pin);
-  if (s.role === 'in') return HEAD_H + (s.pole + 0.5) * c.outputs * ROW_H;
-  return HEAD_H + (s.pole * c.outputs + s.index + 0.5) * ROW_H;
-}
-
-// Splitter inputs are always on the left, outputs on the right.
-function fixedSide(c, pin) {
-  if (!isSplitter(c)) return null;
-  return splitterPin(c, pin).role === 'in' ? 'left' : 'right';
-}
-
-function anchorPoint(c, pin, side) {
-  return { x: side === 'right' ? c.x + BOX_W : c.x, y: c.y + pinY(c, pin) };
-}
-
-// A wire leaves a connector on the side that faces the other end.
-function sideToward(c, other) {
-  if (!other || other === c) return 'right';
-  return other.x + BOX_W / 2 >= c.x + BOX_W / 2 ? 'right' : 'left';
-}
-
-function bezierPoint(p0, p1, p2, p3, t) {
-  const u = 1 - t;
-  const a = u * u * u;
-  const b = 3 * u * u * t;
-  const c = 3 * u * t * t;
-  const d = t * t * t;
-  return { x: a * p0.x + b * p1.x + c * p2.x + d * p3.x, y: a * p0.y + b * p1.y + c * p2.y + d * p3.y };
-}
-
-function curve(a, sideA, b, sideB) {
-  const dA = sideA === 'right' ? 1 : -1;
-  const dB = sideB === 'right' ? 1 : -1;
-  const reach =
-    dA === dB
-      ? Math.max(60, Math.abs(b.y - a.y) * 0.35 + 40)
-      : clamp(Math.abs(b.x - a.x) * 0.5, 40, 220);
-  const c1 = { x: a.x + dA * reach, y: a.y };
-  const c2 = { x: b.x + dB * reach, y: b.y };
-  return {
-    d: `M ${round(a.x)} ${round(a.y)} C ${round(c1.x)} ${round(c1.y)} ${round(c2.x)} ${round(c2.y)} ${round(b.x)} ${round(b.y)}`,
-    mid: bezierPoint(a, c1, c2, b, 0.5),
-  };
-}
-
-function wireGeometry(project, wire) {
+// Ends and path of a wire. `layouts` is an optional cache of component layouts.
+function wireGeometry(project, wire, layouts = null) {
   const ca = findConnector(project, wire.from.connector);
   const cb = findConnector(project, wire.to.connector);
   if (!ca || !cb) return null;
-  const sideA = fixedSide(ca, wire.from.pin) || sideToward(ca, cb);
-  const sideB = fixedSide(cb, wire.to.pin) || sideToward(cb, ca);
-  const a = anchorPoint(ca, wire.from.pin, sideA);
-  const b = anchorPoint(cb, wire.to.pin, sideB);
-  return { sideA, sideB, ...curve(a, sideA, b, sideB) };
+  const a = pinAnchor(ca, wire.from.pin, project, layouts?.get(ca.id));
+  const b = pinAnchor(cb, wire.to.pin, project, layouts?.get(cb.id));
+  if (!a || !b) return null;
+  return { a, b, ...cablePath(a, b) };
 }
 
 export function createCanvas(wrap, store) {
@@ -260,7 +132,10 @@ export function createCanvas(wrap, store) {
       maxX = Math.max(maxX, x + w);
       maxY = Math.max(maxY, y + h);
     };
-    for (const c of project.connectors) add(c.x, c.y, BOX_W, connectorHeight(c, project));
+    for (const c of project.connectors) {
+      const L = layoutComponent(c, project);
+      add(c.x, c.y, L.width, L.height);
+    }
     if (bg) add(bg.x, bg.y, bg.width, bg.height);
     return { x: minX - 60, y: minY - 30, width: maxX - minX + 120, height: maxY - minY + 60 };
   }
@@ -295,7 +170,8 @@ export function createCanvas(wrap, store) {
     const project = store.project;
     if (target?.type === 'connector') {
       const c = findConnector(project, target.id);
-      if (c) centerOn(c.x + BOX_W / 2, c.y + connectorHeight(c, project) / 2);
+      const L = c && layoutComponent(c, project);
+      if (c) centerOn(c.x + L.width / 2, c.y + L.height / 2);
     } else if (target?.type === 'wire') {
       const w = findWire(project, target.id);
       const g = w && wireGeometry(project, w);
@@ -304,7 +180,7 @@ export function createCanvas(wrap, store) {
   }
 
   // A free place near the middle of the view for a new connector.
-  function placeForNewConnector(pinCount) {
+  function placeForNewConnector(pinCount = 1) {
     const r = size();
     const center = { x: (r.width / 2 - view.x) / view.k, y: (r.height / 2 - view.y) / view.k };
     const h = HEAD_H + pinCount * ROW_H;
@@ -312,7 +188,10 @@ export function createCanvas(wrap, store) {
     let y = snap(center.y - h / 2);
     const overlaps = () =>
       store.project.connectors.some(
-        (c) => x < c.x + BOX_W + 20 && x + BOX_W + 20 > c.x && y < c.y + connectorHeight(c, store.project) + 20 && y + h + 20 > c.y,
+        (c) => {
+          const L = layoutComponent(c, store.project);
+          return x < c.x + L.width + 20 && x + BOX_W + 20 > c.x && y < c.y + L.height + 20 && y + h + 20 > c.y;
+        },
       );
     for (let i = 0; i < 40 && overlaps(); i += 1) {
       x += 30;
@@ -353,191 +232,6 @@ export function createCanvas(wrap, store) {
     layers.background.innerHTML = `
       <g class="ow-bg${bg.movable ? ' is-movable' : ''}"${bg.movable ? ' data-bg="1"' : ''} opacity="${bg.opacity}">${picture}</g>
       ${bg.movable ? `<rect class="ow-bg-frame" x="${x}" y="${y}" width="${w}" height="${h}"/>` : ''}`;
-  }
-
-  function renderPhoto(c, id) {
-    const box = photoBox(c, store.project);
-    if (!box) return '';
-    const top = HEAD_H + rowCount(c) * ROW_H;
-    return `<g class="ow-head-g ow-photo" data-conn-head="${id}">
-      <line class="ow-photo-line" x1="0" y1="${top}" x2="${BOX_W}" y2="${top}"/>
-      <rect class="ow-photo-bg" x="${box.x}" y="${box.y}" width="${box.width}" height="${box.height}"/>
-      ${pictureSvg(box.img, { id: c.image, rotation: c.photoRotation, crop: c.photoCrop, ...box })}
-    </g>`;
-  }
-
-  function renderConnector(c, sides, selected) {
-    if (isSplitter(c)) return renderSplitter(c, sides, selected);
-    const id = esc(c.id);
-    const h = connectorHeight(c, store.project);
-    const rows = c.pins
-      .map((p, i) => {
-        const n = i + 1;
-        const used = sides.get(`${c.id}:${n}`);
-        const anchor = (side, x) => {
-          if (used && !used.has(side)) return '';
-          return `<circle class="ow-anchor${used ? ' is-used' : ''}" cx="${x}" cy="${ROW_H / 2}" r="${used ? 3.5 : 3}"/>`;
-        };
-        return `<g class="ow-pinrow" data-conn="${id}" data-pin="${n}" transform="translate(0 ${HEAD_H + i * ROW_H})">
-          <rect class="ow-row-bg" x="0" y="0" width="${BOX_W}" height="${ROW_H}"/>
-          ${i > 0 ? `<line class="ow-row-line" x1="0" y1="0" x2="${BOX_W}" y2="0"/>` : ''}
-          <text class="ow-pin-num" x="${NUM_W / 2}" y="${ROW_H / 2}" dominant-baseline="central">${n}</text>
-          <text class="ow-pin-label" x="${NUM_W + 8}" y="${ROW_H / 2}" dominant-baseline="central">${esc(truncate(p.label, p.role ? 19 : 24))}</text>
-          ${p.role ? `<text class="ow-role ow-role-${p.role}" x="${BOX_W - 9}" y="${ROW_H / 2}" dominant-baseline="central">${p.role === 'in' ? 'IN' : 'OUT'}</text>` : ''}
-          ${anchor('left', 0)}${anchor('right', BOX_W)}
-          <rect class="ow-hit ow-pin-hit" x="-12" y="0" width="${BOX_W + 24}" height="${ROW_H}"/>
-        </g>`;
-      })
-      .join('');
-    return `<g class="ow-conn" data-conn-id="${id}" transform="translate(${round(c.x)} ${round(c.y)})">
-      ${selected ? `<rect class="ow-sel" x="-6" y="-6" width="${BOX_W + 12}" height="${h + 12}" rx="6" stroke-width="10"/>` : ''}
-      <rect class="ow-body" x="0" y="0" width="${BOX_W}" height="${h}" rx="3"/>
-      <rect class="ow-numcol" x="0.7" y="${HEAD_H}" width="${NUM_W}" height="${h - HEAD_H - 0.7}"/>
-      <g class="ow-head-g" data-conn-head="${id}">
-        <path class="ow-head" d="M 0 3 A 3 3 0 0 1 3 0 H ${BOX_W - 3} A 3 3 0 0 1 ${BOX_W} 3 V ${HEAD_H} H 0 Z"/>
-        <text class="ow-ref" x="10" y="${HEAD_H / 2}" dominant-baseline="central">${esc(truncate(c.ref, 12))}</text>
-        <text class="ow-pn" x="${BOX_W - 10}" y="${HEAD_H / 2}" text-anchor="end" dominant-baseline="central">${esc(truncate(c.partNumber, 20))}</text>
-      </g>
-      ${rows}
-      ${renderPhoto(c, id)}
-    </g>`;
-  }
-
-  // A splitter looks like a lever splitter: a grey body, one colored lever for
-  // each input on the left, and the levers of its outputs on the right.
-  function renderSplitter(c, sides, selected) {
-    const id = esc(c.id);
-    const h = connectorHeight(c, store.project);
-    const M = c.outputs;
-    const LW = 44; // Lever width.
-    const inX = 9;
-    const outX = BOX_W - 9 - LW;
-    const anchor = (pin, side) => {
-      const used = sides.get(`${c.id}:${pin}`);
-      const x = side === 'right' ? BOX_W : 0;
-      return `<circle class="ow-anchor${used ? ' is-used' : ''}" cx="${x}" cy="0" r="${used ? 3.5 : 3}"/>`;
-    };
-    // The name of the pin is on its lever, in a color that you can read on the lever.
-    const lever = (x, y, height, hex, text) => {
-      const n = Number.parseInt(hex.slice(1), 16);
-      const light = (0.299 * (n >> 16) + 0.587 * ((n >> 8) & 255) + 0.114 * (n & 255)) / 255 > 0.62;
-      return `
-      <rect class="ow-lever" x="${x}" y="${y}" width="${LW}" height="${height}" rx="4" fill="${hex}"/>
-      <path class="ow-lever-mark" d="M ${x + 5} ${y + height / 2 - 3} v 6"/>
-      <text class="ow-lever-text" x="${x + LW / 2 + 2}" y="${y + height / 2}" text-anchor="middle" dominant-baseline="central"
-        fill="${light ? '#1d2833' : '#ffffff'}">${esc(truncate(text, 7))}</text>`;
-    };
-
-    const groups = [];
-    for (let p = 0; p < c.poles; p += 1) {
-      const hex = colorInfo(SPLITTER_COLORS[p % SPLITTER_COLORS.length])?.hex || '#8c9196';
-      const top = HEAD_H + p * M * ROW_H;
-      const inPin = p + 1;
-      const inMid = (M * ROW_H) / 2;
-      const inLabel = c.pins[inPin - 1]?.label || `IN ${p + 1}`;
-      // Lines inside the splitter, from the input to each output.
-      const bus = Array.from({ length: M }, (_, k) => {
-        const y = (k + 0.5) * ROW_H;
-        return `M ${inX + LW} ${inMid} H ${BOX_W / 2} V ${y} H ${outX}`;
-      }).join(' ');
-      const outs = Array.from({ length: M }, (_, k) => {
-        const pin = c.poles + p * M + k + 1;
-        const label = c.pins[pin - 1]?.label || `${p + 1}.${k + 1}`;
-        return `<g class="ow-pinrow" data-conn="${id}" data-pin="${pin}" transform="translate(0 ${top + k * ROW_H})">
-          <rect class="ow-row-bg" x="${BOX_W / 2}" y="0" width="${BOX_W / 2}" height="${ROW_H}"/>
-          ${lever(outX, 3, ROW_H - 6, hex, label)}
-          <g transform="translate(0 ${ROW_H / 2})">${anchor(pin, 'right')}</g>
-          <rect class="ow-hit ow-pin-hit" x="${BOX_W / 2}" y="0" width="${BOX_W / 2 + 12}" height="${ROW_H}"/>
-        </g>`;
-      }).join('');
-      groups.push(`<g class="ow-pole">
-        ${p > 0 ? `<line class="ow-split-sep" x1="0" y1="${top}" x2="${BOX_W}" y2="${top}"/>` : ''}
-        <path class="ow-bus" d="${bus}" transform="translate(0 ${top})" stroke="${hex}"/>
-        <g class="ow-pinrow" data-conn="${id}" data-pin="${inPin}" transform="translate(0 ${top})">
-          <rect class="ow-row-bg" x="0" y="0" width="${BOX_W / 2}" height="${M * ROW_H}"/>
-          ${lever(inX, 3, M * ROW_H - 6, hex, inLabel)}
-          <g transform="translate(0 ${inMid})">${anchor(inPin, 'left')}</g>
-          <rect class="ow-hit ow-pin-hit" x="-12" y="0" width="${BOX_W / 2 + 12}" height="${M * ROW_H}"/>
-        </g>
-        ${outs}
-      </g>`);
-    }
-
-    return `<g class="ow-conn ow-splitter" data-conn-id="${id}" transform="translate(${round(c.x)} ${round(c.y)})">
-      ${selected ? `<rect class="ow-sel" x="-6" y="-6" width="${BOX_W + 12}" height="${h + 12}" rx="6" stroke-width="10"/>` : ''}
-      <rect class="ow-split-body" x="0" y="0" width="${BOX_W}" height="${h}" rx="4"/>
-      <g class="ow-head-g" data-conn-head="${id}">
-        <path class="ow-head" d="M 0 4 A 4 4 0 0 1 4 0 H ${BOX_W - 4} A 4 4 0 0 1 ${BOX_W} 4 V ${HEAD_H} H 0 Z"/>
-        <text class="ow-ref" x="10" y="${HEAD_H / 2}" dominant-baseline="central">${esc(truncate(c.ref, 12))}</text>
-        <text class="ow-pn" x="${BOX_W - 10}" y="${HEAD_H / 2}" text-anchor="end" dominant-baseline="central">${esc(truncate(c.partNumber || `${c.poles} in, ${c.poles * M} out`, 20))}</text>
-      </g>
-      ${groups.join('')}
-      ${renderPhoto(c, id)}
-    </g>`;
-  }
-
-  // A small USB plug at the end of a cable. It points into the component.
-  // `dir` is 1 when the cable leaves to the right, -1 to the left.
-  function usbPlug(point, dir, type) {
-    const shell = {
-      A: { w: 11, h: 9, rx: 0.8 },
-      B: { w: 9, h: 9, rx: 2.5 },
-      C: { w: 9, h: 5.5, rx: 2.75 },
-      MICRO: { w: 7, h: 4, rx: 1 },
-      MINI: { w: 8, h: 5, rx: 1.2 },
-    }[type] || { w: 10, h: 7, rx: 1 };
-    const label = { A: 'A', B: 'B', C: 'C', MICRO: 'µ', MINI: 'm' }[type] || '';
-    const bootW = 17;
-    const bootH = Math.max(shell.h + 4, 10);
-    // The shapes are drawn for a cable that leaves to the right, then mirrored
-    // for the left side. The letter is not mirrored.
-    const textX = point.x + dir * 1.35 * (shell.w + 1 + bootW / 2);
-    const k = 1.35;
-    return `<g class="ow-plug">
-      <g transform="translate(${round(point.x)} ${round(point.y)}) scale(${dir * k} ${k})">
-        <rect class="ow-plug-shell" x="1" y="${-shell.h / 2}" width="${shell.w}" height="${shell.h}" rx="${shell.rx}"/>
-        <rect class="ow-plug-boot" x="${shell.w + 1}" y="${-bootH / 2}" width="${bootW}" height="${bootH}" rx="2.5"/>
-      </g>
-      <text class="ow-plug-text" x="${round(textX)}" y="${round(point.y + 0.5)}" dominant-baseline="central">${label}</text>
-    </g>`;
-  }
-
-  function renderUsb(w, g, selected) {
-    const project = store.project;
-    const ca = findConnector(project, w.from.connector);
-    const cb = findConnector(project, w.to.connector);
-    const a = anchorPoint(ca, w.from.pin, g.sideA);
-    const b = anchorPoint(cb, w.to.pin, g.sideB);
-    return `<g class="ow-wire ow-usb" data-wire="${esc(w.id)}">
-      ${selected ? `<path class="ow-sel" d="${g.d}" stroke-width="16"/>` : ''}
-      <path class="ow-usb-outline" d="${g.d}"/>
-      <path class="ow-usb-core" d="${g.d}"/>
-      <path class="ow-usb-shine" d="${g.d}" transform="translate(0 -1)"/>
-      ${usbPlug(a, g.sideA === 'right' ? 1 : -1, w.usbA)}
-      ${usbPlug(b, g.sideB === 'right' ? 1 : -1, w.usbB)}
-      <path class="ow-hit ow-wire-hit" d="${g.d}"/>
-    </g>`;
-  }
-
-  function renderWire(w, g, selected) {
-    if (isUsb(w)) return renderUsb(w, g, selected);
-    const core = colorInfo(w.color)?.hex || '#8c9196';
-    const stripe = w.stripe ? colorInfo(w.stripe)?.hex : null;
-    return `<g class="ow-wire" data-wire="${esc(w.id)}">
-      ${selected ? `<path class="ow-sel" d="${g.d}" stroke-width="14"/>` : ''}
-      <path class="ow-wire-outline" d="${g.d}"/>
-      <path class="ow-wire-core" d="${g.d}" stroke="${core}"/>
-      ${stripe ? `<path class="ow-wire-stripe" d="${g.d}" stroke="${stripe}"/>` : ''}
-      <path class="ow-hit ow-wire-hit" d="${g.d}"/>
-    </g>`;
-  }
-
-  function renderLabel(w, g) {
-    const length = isPositive(w.length) ? `<tspan dx="5">${esc(formatLength(w.length))} mm</tspan>` : '';
-    return `<g class="ow-wlabel" data-wire="${esc(w.id)}" transform="translate(${round(g.mid.x)} ${round(g.mid.y)})">
-      <rect class="ow-label-bg" rx="3"/>
-      <text class="ow-label" text-anchor="middle" dominant-baseline="central"><tspan class="ow-label-ref">${esc(w.ref)}</tspan>${length}</text>
-    </g>`;
   }
 
   function sizeLabels() {
@@ -581,31 +275,32 @@ export function createCanvas(wrap, store) {
   function render() {
     const project = store.project;
     const sel = store.selection;
-    const sides = new Map();
-    const addSide = (end, side) => {
-      const key = `${end.connector}:${end.pin}`;
-      if (!sides.has(key)) sides.set(key, new Set());
-      sides.get(key).add(side);
-    };
+    const layouts = new Map(project.connectors.map((c) => [c.id, layoutComponent(c, project)]));
+    const used = new Set();
     const wires = [];
     const labels = [];
     let selectedWire = '';
     for (const w of project.wires) {
-      const g = wireGeometry(project, w);
+      const g = wireGeometry(project, w, layouts);
       if (!g) continue;
-      addSide(w.from, g.sideA);
-      addSide(w.to, g.sideB);
+      used.add(`${w.from.connector}:${w.from.pin}`);
+      used.add(`${w.to.connector}:${w.to.pin}`);
       const isSelected = sel?.type === 'wire' && sel.id === w.id;
       // The selected wire is drawn last, so it is on top.
-      if (isSelected) selectedWire = renderWire(w, g, true);
-      else wires.push(renderWire(w, g, false));
-      labels.push(renderLabel(w, g));
+      const markup = wireMarkup(w, g, { a: g.a, b: g.b }, isSelected);
+      if (isSelected) selectedWire = markup;
+      else wires.push(markup);
+      labels.push(labelMarkup(w, g));
     }
     if (selectedWire) wires.push(selectedWire);
     renderBackground();
     layers.wires.innerHTML = wires.join('');
     layers.connectors.innerHTML = project.connectors
-      .map((c) => renderConnector(c, sides, sel?.type === 'connector' && sel.id === c.id))
+      .map((c) => {
+        const options = { used, selected: sel?.type === 'connector' && sel.id === c.id };
+        const L = layouts.get(c.id);
+        return c.kind === 'splitter' ? splitterMarkup(c, L, options) : connectorMarkup(c, L, options);
+      })
       .join('');
     layers.labels.innerHTML = labels.join('');
     sizeLabels();
@@ -643,12 +338,14 @@ export function createCanvas(wrap, store) {
 
   function drawTemp(source, point) {
     const c = findConnector(store.project, source.connector);
-    if (!c) return;
-    const side = fixedSide(c, source.pin) || (point.x >= c.x + BOX_W / 2 ? 'right' : 'left');
-    const a = anchorPoint(c, source.pin, side);
-    const reach = clamp(Math.abs(point.x - a.x) * 0.5, 20, 160);
-    const dx = side === 'right' ? reach : -reach;
-    temp.setAttribute('d', `M ${round(a.x)} ${round(a.y)} C ${round(a.x + dx)} ${round(a.y)} ${round(point.x - dx / 2)} ${round(point.y)} ${round(point.x)} ${round(point.y)}`);
+    const a = c && pinAnchor(c, source.pin, store.project);
+    if (!a) return;
+    const reach = clamp(Math.hypot(point.x - a.x, point.y - a.y) * 0.5, 20, 160);
+    const c1 = { x: a.x + a.dir.x * reach, y: a.y + a.dir.y * reach };
+    temp.setAttribute(
+      'd',
+      `M ${round(a.x)} ${round(a.y)} C ${round(c1.x)} ${round(c1.y)} ${round(point.x)} ${round(point.y)} ${round(point.x)} ${round(point.y)}`,
+    );
     temp.removeAttribute('display');
   }
 

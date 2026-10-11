@@ -6,14 +6,18 @@ OpenWire is a free, open-source tool to draw wire harnesses. It operates in your
 
 > **NOTE:** This link operates after you publish the site. Refer to [Publish OpenWire on GitHub Pages](#publish-openwire-on-github-pages).
 
+The version number is in the top right corner of the page. This README is for version 0.4.0.
+
 ## What OpenWire does
 
-- Add connectors with pin names, part numbers and prices.
+- Add connectors with part numbers and prices.
+- Put pins on the four sides of a connector, in groups. Give each group a type, for example XT60, Molex Micro-Fit or JST XH. The drawing shows the connector graphic where the pins touch the side.
 - Set each pin of a connector as an input or an output.
 - Add splitters (lever connectors). Set the number of inputs and the number of outputs for each input.
 - Draw wires from pin to pin with a mouse, a pen or a finger.
-- Give each wire a color, a stripe, a gauge and a length. The colors use the IEC 60757 codes, for example BK, RD and GN.
+- Give each wire a color, a stripe, a gauge and a length. The colors use the IEC 60757 codes, for example BK, RD and GN. The drawing shows the name, the gauge and the length of each wire.
 - Change a wire to a USB cable. The drawing shows a plug at each end: USB-A, USB-B, USB-C, Micro-USB or Mini-USB.
+- Change a wire to a CSI or DSI flat cable for a Raspberry Pi camera or display. Each end is the standard 15-pin connector or the mini 22-pin connector.
 - See the cut list. OpenWire adds an extra length to each wire. You need this length to strip and crimp the wire.
 - See the bill of materials. OpenWire puts the parts with the same part number on one line.
 - Add a photo to each connector and splitter. The photo shows in the drawing and in the printout.
@@ -60,11 +64,38 @@ The first time that you open OpenWire, it shows an example harness. To start a n
 
 ### Add a connector
 
-1. Click **Add** > **Connector**.
-2. In the **Properties** tab, type the name, the number of pins and the part number.
-3. Type a name for each pin.
+1. Click **Add** > **Connector**. A new connector has no pins.
+2. In the **Properties** tab, type the name and the part number.
+3. Add the pins. Refer to [Add pins](#add-pins).
 
-To move a connector, drag its dark bar.
+To move a connector, drag its dark bar or an empty area of the connector.
+
+### Add pins
+
+A connector has four sides: left, right, top and bottom. Each side has groups of pins. Each group has a type.
+
+1. Click the connector.
+2. In the **Properties** tab, find the side in the **Pins** section.
+3. Click **+ Pin** to add a pin. If the side has no group, OpenWire makes a group.
+4. To add a different connector on the same side, click **+ Group**.
+5. In each group, select the **Type**, for example XT60.
+6. Type a name for each pin.
+
+Wires leave each pin straight out from its side. Pins on the top side connect upward. Pins on the bottom side connect downward.
+
+OpenWire puts the groups and the pins in position. It also makes the connector larger when it needs more space.
+
+The type changes only the graphic. You can give any number of pins to any type. For example, an XT60 group can have four pins.
+
+Each pin has a number. The number does not change when you add or delete other pins. Wires stay on their pins.
+
+- To delete a pin, click **×** next to it.
+- To delete a group and its pins, click **Delete group**.
+- To move a group to a different side, select a different **Side**.
+
+If a pin has wires, OpenWire asks before it deletes the pin and its wires.
+
+These types are available: Generic (no graphic), XT30, XT60, XT90, EC5, Deans, Anderson Powerpole, Molex Micro-Fit 3.0, Molex Mini-Fit Jr., Molex KK 254, Molex PicoBlade, JST XH, JST PH, JST SM, Dupont 2.54 mm, Deutsch DT, Superseal 1.5, M12 circular, RJ45, DC barrel jack, screw terminal, lever terminal and ring or spade terminal.
 
 ### Set inputs and outputs
 
@@ -103,6 +134,19 @@ A new wire has no length. Type the length in the **Properties** tab. The new wir
 4. Type the cable length, the part number and the price.
 
 A USB cable is not in the cut list, because you do not cut it from a reel. The BOM shows it as a cable. The next wire that you draw gets the same type as the last wire.
+
+### Add a CSI or DSI flat cable
+
+1. Draw a wire between the two pins.
+2. In the **Properties** tab, set **Type** to **CSI/DSI flat cable**.
+3. Set **Use** to **CSI (camera)** or **DSI (display)**.
+4. Select the connector at each end:
+   - 15 to 15 pins: standard to standard.
+   - 22 to 15 pins: mini to standard.
+   - 22 to 22 pins: mini to mini.
+5. Type the cable length, the part number and the price.
+
+The drawing shows a flat ribbon with a blue stiffener at each end. The label shows CSI or DSI. A flat cable is not in the cut list. The BOM shows it as a cable.
 
 ### Change or delete an item
 
@@ -206,7 +250,15 @@ OpenWire saves projects as JSON text. You can compare two versions of a file in 
   "meta": { "name": "Tail lamp harness", "author": "", "revision": "A" },
   "settings": { "cutMargin": 20, "currency": "€" },
   "connectors": [
-    { "id": "c-x1", "ref": "X1", "x": 0, "y": 40, "partNumber": "DT06-08SA", "pins": [{ "label": "GND" }] }
+    {
+      "id": "c-x1", "kind": "connector", "ref": "X1", "x": 0, "y": 40, "partNumber": "DT06-08SA",
+      "sides": {
+        "left": [],
+        "right": [{ "id": "g-1", "type": "dt", "pins": [{ "n": 1, "label": "GND", "role": "" }] }],
+        "top": [],
+        "bottom": []
+      }
+    }
   ],
   "wires": [
     {
@@ -219,13 +271,16 @@ OpenWire saves projects as JSON text. You can compare two versions of a file in 
 }
 ```
 
-- Pin numbers start at 1.
+- A connector has `sides`. Each side is a list of groups. Each group has a `type` and `pins`.
+- Each pin has a number `n`. Wires refer to pins by this number. Pin numbers start at 1.
+- Files from older versions have a `pins` list on each connector. OpenWire opens them and puts the pins in one group, on the side where most of the wires go.
 - Lengths are in millimeters.
 - The `images` part contains the pictures as text (data URLs). A connector refers to its photo with the `image` field. The `background` part refers to the background picture.
 - `photoRotation` and `rotation` are the turn in degrees. `photoCrop` and `crop` are fractions of the picture: `{ "x": 0.1, "y": 0, "w": 0.8, "h": 1 }`.
 - A splitter has `"kind": "splitter"`, `poles` (inputs) and `outputs` (outputs for each input). Its pins are the inputs first, then the outputs of input 1, then the outputs of input 2.
 - A pin can have `"role": "in"` or `"role": "out"`.
 - A USB cable is a wire with `"kind": "usb"`, `usbA`, `usbB` and `price`.
+- A flat cable is a wire with `"kind": "flat"`, `flatUse` (`CSI` or `DSI`), `flatA` and `flatB` (`15` or `22`) and `price`.
 - The `version` number shows the format version. This version of OpenWire opens version 1.
 
 For a full example, refer to [examples/tail-lamp-harness.openwire.json](examples/tail-lamp-harness.openwire.json).
@@ -250,7 +305,10 @@ css/style.css      Styles: light theme, dark theme and print
 js/app.js          Commands, menu, keyboard, files and start
 js/model.js        Data, cut list, BOM and checks (no browser code)
 js/store.js        Project, selection, undo and redo
-js/canvas.js       SVG drawing, mouse and touch input, SVG export
+js/canvas.js       Drawing area, mouse and touch input, SVG export
+js/layout.js       Size of the components and position of the pins
+js/draw.js         Graphics of components, connector types, wires and cables
+js/version.js      Version number
 js/inspector.js    Properties tab
 js/tables.js       Cut list, BOM and Checks tabs
 js/report.js       Table data, CSV and HTML tables

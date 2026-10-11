@@ -30,8 +30,65 @@ export function usbName(code) {
   return USB_TYPES.find((t) => t.code === code)?.name || code || '';
 }
 
+// Raspberry Pi camera (CSI) and display (DSI) flat cables. Each end is the
+// standard 15-pin connector (1 mm pitch) or the mini 22-pin connector (0.5 mm pitch).
+export const FLAT_ENDS = [
+  { code: '15', name: '15-pin (standard)' },
+  { code: '22', name: '22-pin (mini)' },
+];
+export const FLAT_USES = [
+  { code: 'CSI', name: 'CSI (camera)' },
+  { code: 'DSI', name: 'DSI (display)' },
+];
+
+// The sides of a connector. Each side has groups of pins.
+export const SIDES = [
+  { code: 'left', name: 'Left side' },
+  { code: 'right', name: 'Right side' },
+  { code: 'top', name: 'Top side' },
+  { code: 'bottom', name: 'Bottom side' },
+];
+
+// Connector types for a pin group. The type only changes the graphic.
+// It does not limit the number of pins.
+export const CONNECTOR_TYPES = [
+  { code: 'generic', name: 'Generic (no graphic)' },
+  { code: 'xt30', name: 'XT30' },
+  { code: 'xt60', name: 'XT60' },
+  { code: 'xt90', name: 'XT90' },
+  { code: 'ec5', name: 'EC5' },
+  { code: 'deans', name: 'Deans (T-plug)' },
+  { code: 'anderson', name: 'Anderson Powerpole' },
+  { code: 'microfit', name: 'Molex Micro-Fit 3.0' },
+  { code: 'minifit', name: 'Molex Mini-Fit Jr.' },
+  { code: 'kk254', name: 'Molex KK 254' },
+  { code: 'picoblade', name: 'Molex PicoBlade' },
+  { code: 'jst-xh', name: 'JST XH' },
+  { code: 'jst-ph', name: 'JST PH' },
+  { code: 'jst-sm', name: 'JST SM' },
+  { code: 'dupont', name: 'Dupont 2.54 mm' },
+  { code: 'dt', name: 'Deutsch DT' },
+  { code: 'superseal', name: 'Superseal 1.5' },
+  { code: 'm12', name: 'M12 circular' },
+  { code: 'rj45', name: 'RJ45' },
+  { code: 'barrel', name: 'DC barrel jack' },
+  { code: 'terminal', name: 'Screw terminal' },
+  { code: 'lever', name: 'Lever terminal (WAGO)' },
+  { code: 'ring', name: 'Ring or spade terminal' },
+];
+
+export const connectorTypeName = (code) => CONNECTOR_TYPES.find((t) => t.code === code)?.name || code;
+
 export const isSplitter = (c) => c?.kind === 'splitter';
 export const isUsb = (w) => w?.kind === 'usb';
+export const isFlat = (w) => w?.kind === 'flat';
+// Wires that you cut from a reel. Other kinds are complete cables that you buy.
+export const isCutWire = (w) => !w?.kind || w.kind === 'wire';
+export const WIRE_KINDS = [
+  { code: 'wire', name: 'Wire' },
+  { code: 'usb', name: 'USB cable' },
+  { code: 'flat', name: 'CSI/DSI flat cable' },
+];
 export const componentNoun = (c) => (isSplitter(c) ? 'splitter' : 'connector');
 
 // Wire insulation colors with IEC 60757 codes.
@@ -136,7 +193,8 @@ export function nextRef(items, prefix) {
   return `${prefix}${max + 1}`;
 }
 
-export function makeConnector(project, { x = 0, y = 0, pinCount = 4 } = {}) {
+// A new connector has no pins. Add pins to its sides in Properties.
+export function makeConnector(project, { x = 0, y = 0 } = {}) {
   return {
     id: newId('c'),
     kind: 'connector',
@@ -152,8 +210,109 @@ export function makeConnector(project, { x = 0, y = 0, pinCount = 4 } = {}) {
     image: '',
     photoRotation: 0,
     photoCrop: null,
-    pins: Array.from({ length: clampInt(pinCount, 1, MAX_PINS) }, () => ({ label: '', role: '' })),
+    sides: { left: [], right: [], top: [], bottom: [] },
   };
+}
+
+// ---------- Pins of a connector ----------
+// Each pin has a number `n` that does not change when you add or remove other
+// pins. Wires refer to pins by this number.
+
+export function connectorPins(c) {
+  if (!c) return [];
+  if (isSplitter(c)) return c.pins.map((p, i) => ({ ...p, n: i + 1, side: '', group: null }));
+  const out = [];
+  for (const side of SIDES) {
+    for (const group of c.sides[side.code]) {
+      for (const pin of group.pins) out.push({ ...pin, side: side.code, group });
+    }
+  }
+  return out;
+}
+
+export function findPin(c, n) {
+  if (!c) return null;
+  if (isSplitter(c)) return c.pins[n - 1] || null;
+  for (const side of SIDES) {
+    for (const group of c.sides[side.code]) {
+      const pin = group.pins.find((p) => p.n === n);
+      if (pin) return pin;
+    }
+  }
+  return null;
+}
+
+export function pinCount(c) {
+  return connectorPins(c).length;
+}
+
+function nextPinNumber(c) {
+  return connectorPins(c).reduce((max, p) => Math.max(max, p.n), 0) + 1;
+}
+
+export function findGroup(c, groupId) {
+  for (const side of SIDES) {
+    const group = c?.sides?.[side.code]?.find((g) => g.id === groupId);
+    if (group) return { group, side: side.code };
+  }
+  return null;
+}
+
+export function addGroup(c, side, type = 'generic') {
+  const group = { id: newId('g'), type, pins: [] };
+  c.sides[side].push(group);
+  return group;
+}
+
+// Adds a pin to a group. Without a group, the pin goes into the last group of
+// the side, or into a new group.
+export function addPin(c, side, groupId = null) {
+  const list = c.sides[side];
+  const group = (groupId && list.find((g) => g.id === groupId)) || list[list.length - 1] || addGroup(c, side);
+  const pin = { n: nextPinNumber(c), label: '', role: '' };
+  group.pins.push(pin);
+  return pin;
+}
+
+export function wiresOnPins(project, connectorId, numbers) {
+  const set = new Set(numbers);
+  return project.wires.filter(
+    (w) => (w.from.connector === connectorId && set.has(w.from.pin)) || (w.to.connector === connectorId && set.has(w.to.pin)),
+  );
+}
+
+function dropWires(project, connectorId, numbers) {
+  const gone = new Set(wiresOnPins(project, connectorId, numbers).map((w) => w.id));
+  project.wires = project.wires.filter((w) => !gone.has(w.id));
+}
+
+export function removePin(project, connectorId, n) {
+  const c = findConnector(project, connectorId);
+  if (!c || isSplitter(c)) return;
+  for (const side of SIDES) {
+    for (const group of c.sides[side.code]) group.pins = group.pins.filter((p) => p.n !== n);
+  }
+  dropWires(project, connectorId, [n]);
+}
+
+export function removeGroup(project, connectorId, groupId) {
+  const c = findConnector(project, connectorId);
+  const found = c && findGroup(c, groupId);
+  if (!found) return;
+  dropWires(
+    project,
+    connectorId,
+    found.group.pins.map((p) => p.n),
+  );
+  c.sides[found.side] = c.sides[found.side].filter((g) => g.id !== groupId);
+}
+
+// Moves a group to a different side. The pins and the wires stay the same.
+export function moveGroup(c, groupId, side) {
+  const found = findGroup(c, groupId);
+  if (!found || found.side === side) return;
+  c.sides[found.side] = c.sides[found.side].filter((g) => g.id !== groupId);
+  c.sides[side].push(found.group);
 }
 
 // ---------- Splitters ----------
@@ -246,7 +405,7 @@ export function setSplitterSize(project, id, poles, outputs) {
 
 export function pinRole(c, pin) {
   if (isSplitter(c)) return splitterPin(c, pin).role;
-  return c?.pins[pin - 1]?.role || '';
+  return findPin(c, pin)?.role || '';
 }
 
 // A new wire copies color, gauge and price from the template (the last wire),
@@ -254,7 +413,7 @@ export function pinRole(c, pin) {
 export function makeWire(project, from, to, template = null) {
   return {
     id: newId('w'),
-    kind: isUsb(template) ? 'usb' : 'wire',
+    kind: template?.kind && template.kind !== 'wire' ? template.kind : 'wire',
     ref: nextRef(project.wires, 'W'),
     from: { connector: from.connector, pin: from.pin },
     to: { connector: to.connector, pin: to.pin },
@@ -267,6 +426,9 @@ export function makeWire(project, from, to, template = null) {
     pricePerMeter: template ? numberOr(template.pricePerMeter, 0) : 0,
     usbA: template?.usbA || 'A',
     usbB: template?.usbB || 'C',
+    flatUse: template?.flatUse || 'CSI',
+    flatA: template?.flatA || '15',
+    flatB: template?.flatB || '15',
     price: template ? numberOr(template.price, 0) : 0,
   };
 }
@@ -325,35 +487,13 @@ export function duplicateConnector(project, connectorId) {
   return copy;
 }
 
-export function wiresRemovedByPinCount(project, connectorId, count) {
-  return project.wires.filter(
-    (w) =>
-      (w.from.connector === connectorId && w.from.pin > count) ||
-      (w.to.connector === connectorId && w.to.pin > count),
-  );
-}
-
-// Changes the number of pins. Wires on removed pins are deleted.
-// Returns the number of deleted wires.
-export function setPinCount(project, connectorId, count) {
-  const connector = findConnector(project, connectorId);
-  if (!connector) return 0;
-  const n = clampInt(count, 1, MAX_PINS);
-  const removed = new Set(wiresRemovedByPinCount(project, connectorId, n).map((w) => w.id));
-  project.wires = project.wires.filter((w) => !removed.has(w.id));
-  while (connector.pins.length < n) connector.pins.push({ label: '', role: '' });
-  connector.pins.length = n;
-  return removed.size;
-}
-
 export function endLabel(project, end) {
   const connector = findConnector(project, end.connector);
   return connector ? `${connector.ref}:${end.pin}` : '?';
 }
 
 export function pinLabel(project, end) {
-  const connector = findConnector(project, end.connector);
-  return connector?.pins[end.pin - 1]?.label || '';
+  return findPin(findConnector(project, end.connector), end.pin)?.label || '';
 }
 
 // ---------- Pictures ----------
@@ -438,7 +578,7 @@ export function backgroundRect(project) {
 // ---------- Calculations ----------
 
 export function cutLength(project, wire) {
-  if (isUsb(wire) || !isPositive(wire.length)) return null;
+  if (!isCutWire(wire) || !isPositive(wire.length)) return null;
   return wire.length + Math.max(0, numberOr(project.settings.cutMargin, 0));
 }
 
@@ -458,11 +598,22 @@ export function cutList(project) {
 
 // Wires that you cut from a reel. USB cables are bought as complete cables.
 export function cutWires(project) {
-  return project.wires.filter((w) => !isUsb(w));
+  return project.wires.filter(isCutWire);
 }
 
-export function usbCables(project) {
-  return project.wires.filter(isUsb);
+export function boughtCables(project) {
+  return project.wires.filter((w) => !isCutWire(w));
+}
+
+// Short text for the label of a wire in the drawing: the gauge, or the cable type.
+export function wireKindText(w) {
+  if (isUsb(w)) return 'USB';
+  if (isFlat(w)) return w.flatUse || 'CSI';
+  return w.gauge || '';
+}
+
+export function flatEndName(code) {
+  return FLAT_ENDS.find((e) => e.code === code)?.name || code;
 }
 
 export function totalWireLength(project) {
@@ -528,18 +679,15 @@ export function billOfMaterials(project) {
     );
   }
 
-  for (const w of usbCables(project).sort(byRef)) {
+  for (const w of boughtCables(project).sort(byRef)) {
     const pn = w.partNumber.trim();
     const length = isPositive(w.length) ? `, ${w.length} mm` : '';
+    const description = isFlat(w)
+      ? `${w.flatUse} flat cable, ${w.flatA}-pin to ${w.flatB}-pin${length}`
+      : `USB cable, ${usbName(w.usbA)} to ${usbName(w.usbB)}${length}`;
     add(
-      pn ? `usb:${pn}` : `usb:${w.usbA}|${w.usbB}|${w.length}`,
-      {
-        type: 'Cable',
-        partNumber: pn,
-        manufacturer: '',
-        description: `USB cable, ${usbName(w.usbA)} to ${usbName(w.usbB)}${length}`,
-        unit: 'pcs',
-      },
+      pn ? `cable:${pn}` : `cable:${description}`,
+      { type: 'Cable', partNumber: pn, manufacturer: '', description, unit: 'pcs' },
       1,
       numberOr(w.price, 0),
       w.ref,
@@ -591,7 +739,9 @@ export function runChecks(project) {
       }
       continue;
     }
-    const unused = c.pins.map((_, i) => i + 1).filter((n) => !used.has(n));
+    const unused = connectorPins(c)
+      .map((p) => p.n)
+      .filter((n) => !used.has(n));
     if (unused.length) {
       const list = unused.length > 8 ? `${unused.slice(0, 8).join(', ')} and more` : unused.join(', ');
       const noun = unused.length === 1 ? 'pin' : 'pins';
@@ -602,8 +752,8 @@ export function runChecks(project) {
 
   for (const w of [...project.wires].sort(byRef)) {
     const target = { type: 'wire', id: w.id };
-    if (isUsb(w)) {
-      if (!isPositive(w.length)) add('info', `USB cable ${w.ref} has no length.`, target);
+    if (!isCutWire(w)) {
+      if (!isPositive(w.length)) add('info', `Cable ${w.ref} has no length.`, target);
     } else {
       if (!isPositive(w.length)) add('error', `${w.ref} has no length.`, target);
       if (!String(w.gauge || '').trim()) add('warning', `${w.ref} has no gauge.`, target);
@@ -699,26 +849,59 @@ export function normalizeProject(raw) {
     if (!id || connectorIds.has(id)) id = newId('c');
     const splitter = c.kind === 'splitter';
     const roleOf = (p) => (PIN_ROLES.some((r) => r.code === p?.role) ? p.role : '');
-    let pins;
-    let extra = {};
+    let extra;
     if (splitter) {
       const P = clampInt(c.poles, 1, MAX_POLES);
       const M = clampInt(c.outputs, 1, MAX_OUTPUTS);
-      pins = Array.from({ length: splitterPinCount(P, M) }, (_, i) => ({
+      const pins = Array.from({ length: splitterPinCount(P, M) }, (_, i) => ({
         label: str(arr(c.pins)[i]?.label),
         role: i < P ? 'in' : 'out',
       }));
-      extra = { poles: P, outputs: M };
+      extra = { poles: P, outputs: M, pins };
+    } else if (c.sides && typeof c.sides === 'object') {
+      const used = new Set();
+      let count = 0;
+      const sides = { left: [], right: [], top: [], bottom: [] };
+      for (const side of SIDES) {
+        for (const g of arr(c.sides[side.code])) {
+          if (!g || typeof g !== 'object') continue;
+          const pins = [];
+          for (const p of arr(g.pins)) {
+            if (count >= MAX_PINS) break;
+            let n = Math.round(numberOr(p?.n, 0));
+            if (!(n > 0) || used.has(n)) n = 0;
+            if (n) used.add(n);
+            pins.push({ n, label: str(p?.label), role: roleOf(p) });
+            count += 1;
+          }
+          const type = CONNECTOR_TYPES.some((t) => t.code === g.type) ? g.type : 'generic';
+          sides[side.code].push({ id: str(g.id) || newId('g'), type, pins });
+        }
+      }
+      // Pins without a correct number get the next free number.
+      let next = Math.max(0, ...used) + 1;
+      for (const side of SIDES) {
+        for (const g of sides[side.code]) {
+          for (const p of g.pins) {
+            if (!p.n) {
+              p.n = next;
+              next += 1;
+            }
+          }
+        }
+      }
+      extra = { sides };
     } else {
-      pins = arr(c.pins)
+      // A file from an older OpenWire: one list of pins. They become one group.
+      // The side is set after the wires are read.
+      const pins = arr(c.pins)
         .slice(0, MAX_PINS)
-        .map((p) => ({ label: str(p?.label), role: roleOf(p) }));
-      if (!pins.length) pins.push({ label: '', role: '' });
+        .map((p, i) => ({ n: i + 1, label: str(p?.label), role: roleOf(p) }));
+      extra = { sides: { left: [], right: [], top: [], bottom: [] }, legacyPins: pins };
     }
     const connector = {
       id,
       kind: splitter ? 'splitter' : 'connector',
-      ...extra,
       ref: str(c.ref, splitter ? 'S?' : 'X?'),
       x: numberOr(c.x, 0),
       y: numberOr(c.y, 0),
@@ -731,17 +914,19 @@ export function normalizeProject(raw) {
       image: imageOrEmpty(c.image),
       photoRotation: turnRotation(c.photoRotation, 0),
       photoCrop: cleanCrop(c.photoCrop),
-      pins,
+      ...extra,
     };
     connectorIds.set(id, connector);
     project.connectors.push(connector);
   }
 
+  const hasPin = (c, n) =>
+    c.legacyPins ? n >= 1 && n <= c.legacyPins.length : Boolean(findPin(c, n));
   const validEnd = (end) => {
     if (!end || typeof end !== 'object') return null;
     const connector = connectorIds.get(end.connector);
     const pin = Math.round(numberOr(end.pin, 0));
-    if (!connector || pin < 1 || pin > connector.pins.length) return null;
+    if (!connector || !hasPin(connector, pin)) return null;
     return { connector: connector.id, pin };
   };
 
@@ -757,7 +942,7 @@ export function normalizeProject(raw) {
     const length = numberOr(w.length, null);
     project.wires.push({
       id,
-      kind: w.kind === 'usb' ? 'usb' : 'wire',
+      kind: WIRE_KINDS.some((k) => k.code === w.kind) ? w.kind : 'wire',
       ref: str(w.ref, 'W?'),
       from,
       to,
@@ -770,8 +955,31 @@ export function normalizeProject(raw) {
       pricePerMeter: numberOr(w.pricePerMeter, 0),
       usbA: USB_TYPES.some((t) => t.code === w.usbA) ? w.usbA : 'A',
       usbB: USB_TYPES.some((t) => t.code === w.usbB) ? w.usbB : 'C',
+      flatUse: FLAT_USES.some((t) => t.code === w.flatUse) ? w.flatUse : 'CSI',
+      flatA: FLAT_ENDS.some((t) => t.code === w.flatA) ? w.flatA : '15',
+      flatB: FLAT_ENDS.some((t) => t.code === w.flatB) ? w.flatB : '15',
       price: numberOr(w.price, 0),
     });
+  }
+
+  // Old connectors: put the pins on the side where most of their wires go.
+  for (const c of project.connectors) {
+    if (!c.legacyPins) continue;
+    let right = 0;
+    let left = 0;
+    for (const w of project.wires) {
+      for (const [mine, other] of [
+        [w.from, w.to],
+        [w.to, w.from],
+      ]) {
+        if (mine.connector !== c.id) continue;
+        const o = connectorIds.get(other.connector);
+        if (o && o !== c && o.x < c.x) left += 1;
+        else right += 1;
+      }
+    }
+    if (c.legacyPins.length) c.sides[left > right ? 'left' : 'right'].push({ id: newId('g'), type: 'generic', pins: c.legacyPins });
+    delete c.legacyPins;
   }
 
   return project;

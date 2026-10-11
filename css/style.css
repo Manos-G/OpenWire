@@ -496,7 +496,8 @@ p {
   cursor: pointer;
 }
 
-.ow-head-g {
+.ow-head-g,
+.ow-drag {
   cursor: grab;
 }
 
@@ -1387,4 +1388,112 @@ p {
 
 .crop-spacer {
   flex: 1;
+}
+
+/* ---------- Version ---------- */
+
+.version {
+  align-self: center;
+  padding: 2px 7px;
+  border: 1px solid var(--rule);
+  border-radius: 10px;
+  color: var(--ink-muted);
+  font-size: 12.5px;
+  font-variant-numeric: tabular-nums;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.version:hover {
+  color: var(--ink);
+  border-color: var(--rule-strong);
+}
+
+@media (max-width: 700px) {
+  .topbar .doc {
+    flex: 1 1 58%;
+  }
+
+  .version {
+    order: 6;
+  }
+
+  .topbar .zoom {
+    order: 7;
+    margin-left: 0;
+  }
+}
+
+/* ---------- Sides and pin groups ---------- */
+
+.side-card {
+  margin: 10px 0;
+  padding: 10px;
+  border: 1px solid var(--rule);
+  border-radius: 6px;
+  background: var(--surface);
+}
+
+.side-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px 10px;
+}
+
+.side-title {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.side-count {
+  margin-left: 4px;
+  color: var(--ink-muted);
+  font-weight: 400;
+  font-size: 13.5px;
+}
+
+.side-actions,
+.group-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.group-card {
+  margin-top: 10px;
+  padding: 10px 10px 8px;
+  border-left: 3px solid var(--marker);
+  border-radius: 0 4px 4px 0;
+  background: var(--chrome);
+}
+
+.group-card .field {
+  margin-bottom: 8px;
+}
+
+.group-actions {
+  margin-top: 8px;
+}
+
+.pin-row.has-role {
+  grid-template-columns: 26px minmax(0, 1fr) 84px 32px;
+  row-gap: 0;
+}
+
+.pin-row.has-role .pin-wires {
+  grid-column: 2 / -1;
+  margin-top: -2px;
+}
+
+.small-icon {
+  width: 32px;
+  min-height: 32px;
+}
+
+.small-icon svg {
+  width: 15px;
+  height: 15px;
 }
