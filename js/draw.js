@@ -2,7 +2,7 @@
 // canvas.js puts this markup in the drawing. The SVG export uses the same markup.
 
 import { SPLITTER_COLORS, colorInfo, isFlat, isPositive, isUsb, wireKindText } from './model.js';
-import { COL_W, HEAD_H, HOUSING, LABEL_ZONE, ROW_H } from './layout.js';
+import { CAPTION_H, COL_W, HEAD_H, HOUSING, LABEL_ZONE, ROW_H } from './layout.js';
 import { escapeHtml as esc, formatLength } from './report.js';
 import { pictureSvg } from './images.js';
 
@@ -32,7 +32,7 @@ export const DIAGRAM_CSS = `
 .ow-term-lever { fill: #ef7d14; stroke: #8a4300; stroke-width: 0.7; }
 .ow-ring { fill: none; stroke: #b8862b; stroke-width: 2.2; }
 .ow-ring-barrel { fill: #d9b25a; stroke: #8a6a1c; stroke-width: 0.7; }
-.ow-type-name { fill: #6b7884; font-size: 9px; letter-spacing: 0.02em; }
+.ow-group-name { fill: #3d4a57; font-size: 9.5px; font-weight: 600; letter-spacing: 0.02em; }
 .ow-wire-outline { fill: none; stroke: #1d2833; stroke-width: 5; stroke-linecap: round; }
 .ow-wire-core { fill: none; stroke-width: 3; stroke-linecap: round; }
 .ow-wire-stripe { fill: none; stroke-width: 1.5; stroke-dasharray: 6 6; }
@@ -252,7 +252,7 @@ function pinMarkup(c, L, item, pinPos, used) {
     const x = pinPos.x;
     const zone = top ? L.topZone : L.bottomZone;
     const label = esc(truncate(pin.label, Math.floor((LABEL_ZONE - 8 - (role ? 18 : 0) - (plain ? 0 : 12)) / CHAR_W)));
-    const y0 = top ? HOUSING + 5 : H - HOUSING - 5;
+    const y0 = top ? HOUSING + L.topCaption + 5 : H - HOUSING - L.bottomCaption - 5;
     const turn = top ? 90 : -90;
     body = `
       <rect class="ow-row-bg" x="${r1(x - COL_W / 2)}" y="${r1(top ? 0 : H - zone)}" width="${COL_W}" height="${zone}"/>
@@ -262,6 +262,25 @@ function pinMarkup(c, L, item, pinPos, used) {
       <rect class="ow-hit ow-pin-hit" x="${r1(x - COL_W / 2)}" y="${r1(top ? -12 : H - zone)}" width="${COL_W}" height="${zone + 12}"/>`;
   }
   return `<g class="ow-pinrow" data-conn="${id}" data-pin="${pin.n}">${body}</g>`;
+}
+
+// The name and type of a pin group, next to its connector graphic.
+function captionMarkup(item, L) {
+  if (!item.caption) return '';
+  const W = L.width;
+  const H = L.height;
+  const title = `<title>${esc(item.caption)}</title>`;
+  if (item.side === 'left' || item.side === 'right') {
+    const left = item.side === 'left';
+    const room = (L.twoSided ? W / 2 : W) - 10;
+    const text = esc(truncate(item.caption, Math.floor(room / 5.2)));
+    return `<text class="ow-group-name" x="${left ? 3 : W - 3}" y="${r1(item.captionAt)}" dominant-baseline="central"${left ? '' : ' text-anchor="end"'}>${title}${text}</text>`;
+  }
+  const top = item.side === 'top';
+  const room = Math.max(item.to - item.from + 2, 30);
+  const text = esc(truncate(item.caption, Math.floor(room / 5.2)));
+  const y = top ? HOUSING + CAPTION_H / 2 + 1 : H - HOUSING - CAPTION_H / 2 - 1;
+  return `<text class="ow-group-name" x="${r1((item.from + item.to) / 2)}" y="${r1(y)}" text-anchor="middle" dominant-baseline="central">${title}${text}</text>`;
 }
 
 function headMarkup(c, L, subtitle) {
@@ -300,7 +319,7 @@ export function connectorMarkup(c, L, { used, selected }) {
     .map((item) => {
       const pitch = item.side === 'left' || item.side === 'right' ? ROW_H : COL_W;
       const pins = item.pins.map((p) => pinMarkup(c, L, item, p, used)).join('');
-      return `<g class="ow-group">${housing(item, L.width, L.height, pitch)}${pins}</g>`;
+      return `<g class="ow-group">${housing(item, L.width, L.height, pitch)}${captionMarkup(item, L)}${pins}</g>`;
     })
     .join('');
   const empty = L.pins.size

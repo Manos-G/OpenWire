@@ -259,7 +259,7 @@ export function findGroup(c, groupId) {
 }
 
 export function addGroup(c, side, type = 'generic') {
-  const group = { id: newId('g'), type, pins: [] };
+  const group = { id: newId('g'), name: '', type, pins: [] };
   c.sides[side].push(group);
   return group;
 }
@@ -875,7 +875,7 @@ export function normalizeProject(raw) {
             count += 1;
           }
           const type = CONNECTOR_TYPES.some((t) => t.code === g.type) ? g.type : 'generic';
-          sides[side.code].push({ id: str(g.id) || newId('g'), type, pins });
+          sides[side.code].push({ id: str(g.id) || newId('g'), name: str(g.name), type, pins });
         }
       }
       // Pins without a correct number get the next free number.
@@ -978,7 +978,9 @@ export function normalizeProject(raw) {
         else right += 1;
       }
     }
-    if (c.legacyPins.length) c.sides[left > right ? 'left' : 'right'].push({ id: newId('g'), type: 'generic', pins: c.legacyPins });
+    if (c.legacyPins.length) {
+      c.sides[left > right ? 'left' : 'right'].push({ id: newId('g'), name: '', type: 'generic', pins: c.legacyPins });
+    }
     delete c.legacyPins;
   }
 

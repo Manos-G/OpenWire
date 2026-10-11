@@ -272,7 +272,13 @@ export function createInspector(root, store) {
       (t) => `<option value="${t.code}"${t.code === group.type ? ' selected' : ''}>${esc(t.name)}</option>`,
     ).join('');
     const sides = SIDES.map((sd) => `<option value="${sd.code}"${sd.code === sideCode ? ' selected' : ''}>${esc(sd.name)}</option>`).join('');
+    const nameId = nextId();
     return `<div class="group-card">
+      <div class="field">
+        <label for="${nameId}">Group name (optional)</label>
+        <input class="input" id="${nameId}" type="text" data-group-name="${esc(group.id)}" value="${esc(group.name || '')}"
+          placeholder="For example Battery or J3" maxlength="40" autocomplete="off" spellcheck="false">
+      </div>
       <div class="field-row">
         <div class="field">
           <label for="${typeId}">Type</label>
@@ -730,7 +736,7 @@ export function createInspector(root, store) {
         if (what === 'type') found.group.type = CONNECTOR_TYPES.some((t) => t.code === el.value) ? el.value : 'generic';
         else if (SIDES.some((sd) => sd.code === el.value)) moveGroup(target, groupId, el.value);
       },
-      what === 'side' ? { source: 'inspector', structural: true } : { source: 'inspector' },
+      { source: 'inspector', structural: true },
     );
   }
 
@@ -767,6 +773,19 @@ export function createInspector(root, store) {
 
   root.addEventListener('input', (e) => {
     const el = e.target;
+    if (el.dataset.groupName) {
+      const c = selectedConnector();
+      if (!c) return;
+      const groupId = el.dataset.groupName;
+      store.update(
+        (project) => {
+          const found = findGroup(findConnector(project, c.id), groupId);
+          if (found) found.group.name = el.value;
+        },
+        { source: 'inspector', coalesce: `group-name:${groupId}` },
+      );
+      return;
+    }
     if (el.tagName === 'SELECT' || el.type === 'checkbox' || el.dataset.on === 'change') return;
     applyInput(el);
   });

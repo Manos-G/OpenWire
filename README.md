@@ -6,7 +6,7 @@ OpenWire is a free, open-source tool to draw wire harnesses. It operates in your
 
 > **NOTE:** This link operates after you publish the site. Refer to [Publish OpenWire on GitHub Pages](#publish-openwire-on-github-pages).
 
-The version number is in the top right corner of the page. This README is for version 0.4.0.
+The version number is in the top right corner of the page. This README is for version 0.4.1.
 
 ## What OpenWire does
 
@@ -79,7 +79,10 @@ A connector has four sides: left, right, top and bottom. Each side has groups of
 3. Click **+ Pin** to add a pin. If the side has no group, OpenWire makes a group.
 4. To add a different connector on the same side, click **+ Group**.
 5. In each group, select the **Type**, for example XT60.
-6. Type a name for each pin.
+6. If necessary, type a **Group name**, for example Battery or J3.
+7. Type a name for each pin.
+
+The drawing shows the group name and the type next to the connector graphic, for example "Battery · XT60". A Generic group without a name shows no text.
 
 Wires leave each pin straight out from its side. Pins on the top side connect upward. Pins on the bottom side connect downward.
 
@@ -273,6 +276,7 @@ OpenWire saves projects as JSON text. You can compare two versions of a file in 
 
 - A connector has `sides`. Each side is a list of groups. Each group has a `type` and `pins`.
 - Each pin has a number `n`. Wires refer to pins by this number. Pin numbers start at 1.
+- A group can have a `name`. The drawing shows the name and the type.
 - Files from older versions have a `pins` list on each connector. OpenWire opens them and puts the pins in one group, on the side where most of the wires go.
 - Lengths are in millimeters.
 - The `images` part contains the pictures as text (data URLs). A connector refers to its photo with the `image` field. The `background` part refers to the background picture.

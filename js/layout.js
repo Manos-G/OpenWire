@@ -7,7 +7,7 @@
 // From top to bottom a connector is:
 //   top pins (if any) | dark name bar | left and right pins | photo | bottom pins (if any)
 
-import { findImage, isSplitter, pictureView, splitterPin } from './model.js';
+import { connectorTypeName, findImage, isSplitter, pictureView, splitterPin } from './model.js';
 
 export const BOX_W = 176;
 export const HEAD_H = 30;
@@ -17,6 +17,16 @@ export const GROUP_GAP = 8; // Space between two groups on one side.
 export const PAD = 6;
 export const HOUSING = 22; // Depth of the connector graphic from the edge.
 export const LABEL_ZONE = 62; // Space for the names of top and bottom pins.
+export const CAPTION_H = 14; // Space for the name of a pin group.
+
+// The text that the drawing shows for a pin group: its name and its type.
+// A generic group without a name shows no text.
+export function groupCaption(group) {
+  const name = (group.name || '').trim();
+  const type = group.type && group.type !== 'generic' ? connectorTypeName(group.type) : '';
+  if (name && type) return `${name} · ${type}`;
+  return name || type;
+}
 const TWO_SIDE_W = 232; // Minimum width when pins are on the left and the right.
 const PHOTO_PAD = 6;
 const PHOTO_MAX_H = 150;
@@ -30,18 +40,31 @@ export const DIRS = {
 
 // Places the groups of one side along the side. A group with no pins still
 // gets one place, so that you can see it.
-function placeGroups(groups, pitch) {
+// On the left and right sides, the name of a group goes above its pins.
+function placeGroups(groups, pitch, captionAbove = false) {
   let pos = 0;
   const items = groups.map((group, i) => {
     if (i) pos += GROUP_GAP;
+    const caption = groupCaption(group);
+    let captionAt = null;
+    if (caption && captionAbove) {
+      captionAt = pos + CAPTION_H / 2;
+      pos += CAPTION_H;
+    }
     const slots = Math.max(1, group.pins.length);
+    // On the top and bottom sides, a group is at least as wide as its name.
+    // The pins stay together in the middle of the group.
+    const span = Math.max(slots * pitch, !captionAbove && caption ? Math.min(150, caption.length * 5.4 + 10) : 0);
+    const inset = (span - slots * pitch) / 2;
     const item = {
       group,
+      caption,
+      captionAt,
       start: pos,
-      end: pos + slots * pitch,
-      pins: group.pins.map((pin, k) => ({ pin, at: pos + (k + 0.5) * pitch })),
+      end: pos + span,
+      pins: group.pins.map((pin, k) => ({ pin, at: pos + inset + (k + 0.5) * pitch })),
     };
-    pos += slots * pitch;
+    pos += span;
     return item;
   });
   return { items, length: pos };
@@ -79,15 +102,18 @@ export function layoutComponent(c, project = null) {
 
 function layoutConnector(c, project) {
   const s = c.sides;
-  const L = placeGroups(s.left, ROW_H);
-  const R = placeGroups(s.right, ROW_H);
+  const L = placeGroups(s.left, ROW_H, true);
+  const R = placeGroups(s.right, ROW_H, true);
   const T = placeGroups(s.top, COL_W);
   const B = placeGroups(s.bottom, COL_W);
 
   const width = Math.max(s.left.length && s.right.length ? TWO_SIDE_W : BOX_W, T.length + 2 * PAD + 16, B.length + 2 * PAD + 16);
   const topLabels = s.top.length ? labelSpace(s.top) : 0;
   const bottomLabels = s.bottom.length ? labelSpace(s.bottom) : 0;
-  const topZone = s.top.length ? HOUSING + topLabels : 0;
+  // On the top and bottom sides, the group names go next to the connector graphic.
+  const topCaption = T.items.some((i) => i.caption) ? CAPTION_H : 0;
+  const bottomCaption = B.items.some((i) => i.caption) ? CAPTION_H : 0;
+  const topZone = s.top.length ? HOUSING + topCaption + topLabels : 0;
   const headY = topZone;
   const rowsTop = headY + HEAD_H;
   const sideLength = Math.max(L.length, R.length);
@@ -96,7 +122,7 @@ function layoutConnector(c, project) {
   const photoInfo = photoSize(c, project, width);
   const photo = photoInfo ? { ...photoInfo, x: PHOTO_PAD, y: rowsBottom + PHOTO_PAD } : null;
   const bottomStart = rowsBottom + (photo ? photo.height + PHOTO_PAD * 2 : 0);
-  const bottomZone = s.bottom.length ? HOUSING + bottomLabels : 0;
+  const bottomZone = s.bottom.length ? HOUSING + bottomCaption + bottomLabels : 0;
   const height = bottomStart + bottomZone;
 
   const pins = new Map();
@@ -116,7 +142,15 @@ function layoutConnector(c, project) {
         pins.set(pin.n, p);
         return p;
       });
-      groups.push({ side, group: item.group, from: offset + item.start, to: offset + item.end, pins: groupPins });
+      groups.push({
+        side,
+        group: item.group,
+        caption: item.caption,
+        captionAt: item.captionAt === null ? null : offset + item.captionAt,
+        from: offset + item.start,
+        to: offset + item.end,
+        pins: groupPins,
+      });
     }
   }
 
@@ -129,6 +163,8 @@ function layoutConnector(c, project) {
     bottomStart,
     topZone,
     bottomZone,
+    topCaption,
+    bottomCaption,
     groups,
     pins,
     photo,
