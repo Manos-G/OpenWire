@@ -35,6 +35,7 @@ import {
 import { BACKGROUND_MAX_SIZE, PHOTO_MAX_SIZE, isImageFile, loadPicture, pickImageFile } from './images.js';
 import { openCropDialog } from './crop.js';
 import { VERSION } from './version.js';
+import { buildThemeMenu, setTheme, themeName } from './themes.js';
 
 const EXAMPLE_URL = 'examples/tail-lamp-harness.openwire.json';
 const isMac = /Mac|iPhone|iPad|iPod/.test(navigator.platform || navigator.userAgent);
@@ -582,6 +583,10 @@ const commands = {
   'photo-turn': turnPicture,
   'photo-crop': cropPicture,
   'photo-reset': resetPicture,
+  theme: (el) => {
+    setTheme(el.dataset.themeCode);
+    toast(`Theme: ${themeName()}.`);
+  },
   'zoom-in': () => canvas.zoomBy(1.25),
   'zoom-out': () => canvas.zoomBy(0.8),
   fit: () => canvas.fit(),
@@ -592,13 +597,15 @@ function run(name, el = null) {
   if (command) command(el);
 }
 
-// ---------- Menus (File and Add) ----------
+// ---------- Menus (File, Add and Theme) ----------
+
+buildThemeMenu($('theme-menu'));
 
 const menus = [...document.querySelectorAll('.menu')].map((root) => ({
   button: root.querySelector('[aria-haspopup="menu"]'),
   list: root.querySelector('.menu-list'),
 }));
-const menuItems = (m) => [...m.list.querySelectorAll('[role="menuitem"]')];
+const menuItems = (m) => [...m.list.querySelectorAll('[role^="menuitem"]')];
 const openMenuOf = () => menus.find((m) => !m.list.hidden) || null;
 
 function openMenu(m, { focusFirst = false } = {}) {

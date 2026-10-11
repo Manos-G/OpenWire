@@ -12,18 +12,18 @@ const FONT = "'Barlow Semi Condensed', 'Bahnschrift', 'Roboto Condensed', 'Arial
 // so a drawing looks the same in other programs.
 export const DIAGRAM_CSS = `
 .ow text { font-family: ${FONT}; }
-.ow-head { fill: #26323f; }
-.ow-ref { fill: #ffffff; font-size: 14px; font-weight: 600; }
-.ow-pn { fill: #b9c6d3; font-size: 11px; }
-.ow-body { fill: #ffffff; stroke: #26323f; stroke-width: 1.25; }
-.ow-numcol { fill: #eef2f5; }
-.ow-row-bg { fill: #ffffff; fill-opacity: 0; }
-.ow-pin-num { fill: #52606d; font-size: 11px; text-anchor: middle; font-variant-numeric: tabular-nums; }
-.ow-pin-label { fill: #1d2833; font-size: 12px; }
-.ow-pin-no { fill: #6b7884; font-size: 10.5px; font-variant-numeric: tabular-nums; }
-.ow-empty-pins { fill: #8795a3; font-size: 11px; text-anchor: middle; }
-.ow-anchor { fill: #ffffff; stroke: #8795a3; stroke-width: 1.1; }
-.ow-anchor.is-used { fill: #26323f; stroke: #26323f; }
+.ow-head { fill: var(--ow-head, #26323f); }
+.ow-ref { fill: var(--ow-head-text, #ffffff); font-size: 14px; font-weight: 600; }
+.ow-pn { fill: var(--ow-head-sub, #b9c6d3); font-size: 11px; }
+.ow-body { fill: var(--ow-body, #ffffff); stroke: var(--ow-ink, #26323f); stroke-width: 1.25; }
+.ow-numcol { fill: var(--ow-numcol, #eef2f5); }
+.ow-row-bg { fill: var(--ow-body, #ffffff); fill-opacity: 0; }
+.ow-pin-num { fill: var(--ow-muted, #52606d); font-size: 11px; text-anchor: middle; font-variant-numeric: tabular-nums; }
+.ow-pin-label { fill: var(--ow-text, #1d2833); font-size: 12px; }
+.ow-pin-no { fill: var(--ow-muted, #6b7884); font-size: 10.5px; font-variant-numeric: tabular-nums; }
+.ow-empty-pins { fill: var(--ow-muted, #8795a3); font-size: 11px; text-anchor: middle; }
+.ow-anchor { fill: var(--ow-anchor, #ffffff); stroke: var(--ow-anchor-line, #8795a3); stroke-width: 1.1; }
+.ow-anchor.is-used { fill: var(--ow-anchor-used, #26323f); stroke: var(--ow-anchor-used, #26323f); }
 .ow-housing { stroke-width: 1; stroke-linejoin: round; }
 .ow-contact-bullet { fill: #e0b23a; stroke: #7a6200; stroke-width: 0.8; }
 .ow-contact-metal { fill: #c9ced3; stroke: #4f575e; stroke-width: 0.7; }
@@ -32,23 +32,24 @@ export const DIAGRAM_CSS = `
 .ow-term-lever { fill: #ef7d14; stroke: #8a4300; stroke-width: 0.7; }
 .ow-ring { fill: none; stroke: #b8862b; stroke-width: 2.2; }
 .ow-ring-barrel { fill: #d9b25a; stroke: #8a6a1c; stroke-width: 0.7; }
-.ow-group-name { fill: #3d4a57; font-size: 9.5px; font-weight: 600; letter-spacing: 0.02em; }
-.ow-wire-outline { fill: none; stroke: #1d2833; stroke-width: 5; stroke-linecap: round; }
+.ow-group-name { fill: var(--ow-group-name, #3d4a57); font-size: 9.5px; font-weight: 600; letter-spacing: 0.02em; }
+.ow-wire-outline { fill: none; stroke: var(--ow-wire-edge, #1d2833); stroke-width: 5; stroke-linecap: round; }
 .ow-wire-core { fill: none; stroke-width: 3; stroke-linecap: round; }
 .ow-wire-stripe { fill: none; stroke-width: 1.5; stroke-dasharray: 6 6; }
-.ow-label-bg { fill: #ffffff; stroke: #c3ccd5; stroke-width: 0.75; }
-.ow-label { fill: #1d2833; font-size: 11px; font-variant-numeric: tabular-nums; }
+.ow-label-bg { fill: var(--ow-label-bg, #ffffff); stroke: var(--ow-label-line, #c3ccd5); stroke-width: 0.75; }
+.ow-label { fill: var(--ow-text, #1d2833); font-size: 11px; font-variant-numeric: tabular-nums; }
 .ow-label-ref { font-weight: 600; }
-.ow-label-kind { fill: #52606d; }
-.ow-sel { fill: none; stroke: #f2c12e; stroke-opacity: 0.7; stroke-linecap: round; stroke-linejoin: round; }
-.ow-title { fill: #52606d; font-size: 12px; }
-.ow-photo-line { stroke: #d8e0e7; stroke-width: 1; }
-.ow-photo-bg { fill: #f6f8fa; }
+.ow-label-kind { fill: var(--ow-muted, #52606d); }
+.ow-sel { fill: none; stroke: var(--ow-sel, #f2c12e); stroke-opacity: 0.7; stroke-linecap: round; stroke-linejoin: round; }
+.ow-title { fill: var(--ow-muted, #52606d); font-size: 12px; }
+.ow-photo-line { stroke: var(--ow-row-line, #d8e0e7); stroke-width: 1; }
+.ow-photo-bg { fill: var(--ow-photo-bg, #f6f8fa); }
+.ow-photo-frame { stroke: var(--ow-row-line, #d8e0e7); stroke-width: 1; }
 .ow-role { font-size: 9px; font-weight: 600; letter-spacing: 0.04em; }
 .ow-role-in { fill: #1f5fbf; }
 .ow-role-out { fill: #b35c0a; }
-.ow-split-body { fill: #e3e6e9; stroke: #26323f; stroke-width: 1.25; }
-.ow-split-sep { stroke: #c4cad0; stroke-width: 1; }
+.ow-split-body { fill: var(--ow-split-body, #e3e6e9); stroke: var(--ow-ink, #26323f); stroke-width: 1.25; }
+.ow-split-sep { stroke: var(--ow-split-sep, #c4cad0); stroke-width: 1; }
 .ow-lever { stroke: rgba(0, 0, 0, 0.25); stroke-width: 0.75; }
 .ow-lever-mark { fill: none; stroke: rgba(255, 255, 255, 0.55); stroke-width: 1.2; stroke-linecap: round; }
 .ow-bus { fill: none; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; }
@@ -232,7 +233,7 @@ function pinMarkup(c, L, item, pinPos, used) {
   let body = '';
 
   if (side === 'left' || side === 'right') {
-    const half = L.twoSided ? W / 2 : W;
+    const half = side === 'left' ? L.leftCol : L.rightCol;
     const y = pinPos.y;
     const avail = half - HOUSING - 12 - (role ? 22 : 0) - (plain ? 0 : 12);
     const label = esc(truncate(pin.label, Math.max(3, Math.floor(avail / CHAR_W))));
@@ -272,7 +273,7 @@ function captionMarkup(item, L) {
   const title = `<title>${esc(item.caption)}</title>`;
   if (item.side === 'left' || item.side === 'right') {
     const left = item.side === 'left';
-    const room = (L.twoSided ? W / 2 : W) - 10;
+    const room = (left ? L.leftCol : L.rightCol) - 6;
     const text = esc(truncate(item.caption, Math.floor(room / 5.2)));
     return `<text class="ow-group-name" x="${left ? 3 : W - 3}" y="${r1(item.captionAt)}" dominant-baseline="central"${left ? '' : ' text-anchor="end"'}>${title}${text}</text>`;
   }
@@ -302,6 +303,13 @@ export function photoMarkup(c, L) {
   const box = L.photo;
   if (!box) return '';
   const top = L.rowsBottom;
+  if (L.photoInside) {
+    // A connector photo is in the middle of the connector.
+    return `<g class="ow-head-g ow-photo" data-conn-head="${esc(c.id)}">
+      <rect class="ow-photo-bg ow-photo-frame" x="${box.x - 2}" y="${box.y - 2}" width="${box.width + 4}" height="${box.height + 4}" rx="3"/>
+      ${pictureSvg(box.img, { id: c.image, rotation: c.photoRotation, crop: c.photoCrop, ...box })}
+    </g>`;
+  }
   return `<g class="ow-head-g ow-photo" data-conn-head="${esc(c.id)}">
     <line class="ow-photo-line" x1="0" y1="${top}" x2="${L.width}" y2="${top}"/>
     <rect class="ow-photo-bg" x="${box.x}" y="${box.y}" width="${box.width}" height="${box.height}"/>

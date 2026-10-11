@@ -56,57 +56,13 @@
 
 /* ---------- Tokens ---------- */
 
+/* The colors of each theme are in themes.css. */
+
 :root {
   --font: 'Barlow Semi Condensed', 'Bahnschrift', 'Roboto Condensed', 'Arial Narrow', sans-serif;
-
-  --ink: #26323f;
-  --ink-muted: #56636f;
-  --bg: #e7ecf0;
-  --chrome: #f5f7f9;
-  --surface: #ffffff;
-  --rule: #d5dde4;
-  --rule-strong: #b3bfca;
-  --marker: #f2c12e;
-  --focus: #1f5fbf;
-  --error: #c42b27;
-  --warning: #b35c0a;
-  --warning-fill: #ef7d14;
-  --info: #1f5fbf;
-  --primary-bg: #26323f;
-  --primary-fg: #ffffff;
-  --primary-hover: #1a242e;
-  --hover: rgba(31, 95, 191, 0.07);
-  --selected: rgba(242, 193, 46, 0.3);
-  --shadow: 0 10px 28px rgba(20, 32, 44, 0.18);
-
   --radius: 4px;
   --tap: 36px;
   --dock-width: 400px;
-
-  color-scheme: light dark;
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --ink: #e6ebf0;
-    --ink-muted: #a3b1be;
-    --bg: #12181e;
-    --chrome: #1b232b;
-    --surface: #243039;
-    --rule: #2e3a45;
-    --rule-strong: #4a5a69;
-    --focus: #8ab4ff;
-    --error: #ff8a80;
-    --warning: #ffb45e;
-    --warning-fill: #ef7d14;
-    --info: #8ab4ff;
-    --primary-bg: #f2c12e;
-    --primary-fg: #1d2833;
-    --primary-hover: #ffd24d;
-    --hover: rgba(138, 180, 255, 0.09);
-    --selected: rgba(242, 193, 46, 0.22);
-    --shadow: 0 12px 30px rgba(0, 0, 0, 0.5);
-  }
 }
 
 @media (pointer: coarse) {
@@ -341,7 +297,7 @@ p {
   box-shadow: var(--shadow);
 }
 
-.menu-list [role='menuitem'] {
+.menu-list [role^='menuitem'] {
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -356,8 +312,8 @@ p {
   cursor: pointer;
 }
 
-.menu-list [role='menuitem']:hover,
-.menu-list [role='menuitem']:focus-visible {
+.menu-list [role^='menuitem']:hover,
+.menu-list [role^='menuitem']:focus-visible {
   background: var(--hover);
   outline: none;
 }
@@ -381,7 +337,19 @@ p {
   min-width: 0;
   min-height: 0;
   overflow: hidden;
-  background: #ffffff;
+  background: var(--ow-sheet);
+}
+
+.grid-paper {
+  fill: var(--ow-sheet);
+}
+
+.grid-line-minor {
+  stroke: var(--ow-grid-minor);
+}
+
+.grid-line-major {
+  stroke: var(--ow-grid-major);
 }
 
 .dock {
@@ -508,7 +476,7 @@ p {
 
 .ow-temp {
   fill: none;
-  stroke: #26323f;
+  stroke: var(--ow-text);
   stroke-width: 2;
   stroke-dasharray: 6 5;
   stroke-linecap: round;
@@ -526,7 +494,7 @@ p {
 
 .ow-pinrow.is-source .ow-anchor,
 .ow-pinrow.is-target .ow-anchor {
-  stroke: #26323f;
+  stroke: var(--ow-text);
   stroke-width: 1.6;
 }
 
@@ -550,7 +518,7 @@ p {
   gap: 14px;
   padding: 24px;
   text-align: center;
-  color: #26323f;
+  color: var(--ow-text);
   pointer-events: none;
 }
 
@@ -568,19 +536,6 @@ p {
   justify-content: center;
   gap: 8px;
   pointer-events: auto;
-}
-
-/* The drawing is always a white sheet, so its overlay uses the light colors. */
-.canvas-empty .button {
-  background: #ffffff;
-  color: #26323f;
-  border-color: #b3bfca;
-}
-
-.canvas-empty .button.primary {
-  background: #26323f;
-  color: #ffffff;
-  border-color: #26323f;
 }
 
 .canvas-hint {
@@ -639,7 +594,7 @@ p {
   min-width: 20px;
   padding: 0 6px;
   border-radius: 10px;
-  background: var(--error);
+  background: #c42b27;
   color: #ffffff;
   font-size: 13px;
   font-weight: 600;
@@ -651,12 +606,6 @@ p {
 .badge.is-warning {
   background: var(--warning-fill);
   color: #1d2833;
-}
-
-@media (prefers-color-scheme: dark) {
-  .badge {
-    background: #c42b27;
-  }
 }
 
 .panel {
@@ -1177,7 +1126,7 @@ p {
   padding: 6px;
   border: 1px solid var(--rule);
   border-radius: var(--radius);
-  background: #ffffff;
+  background: var(--ow-sheet);
 }
 
 .photo-preview img,
@@ -1411,7 +1360,7 @@ p {
 
 @media (max-width: 700px) {
   .topbar .doc {
-    flex: 1 1 58%;
+    flex: 1 1 40%;
   }
 
   .version {
@@ -1496,4 +1445,49 @@ p {
 .small-icon svg {
   width: 15px;
   height: 15px;
+}
+
+/* ---------- Theme menu ---------- */
+
+.menu-right {
+  left: auto;
+  right: 0;
+  max-height: min(70vh, 520px);
+  overflow-y: auto;
+}
+
+.menu-group {
+  margin: 6px 10px 2px;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--ink-muted);
+}
+
+.menu-list [role='menuitemradio'] {
+  justify-content: flex-start;
+  gap: 10px;
+}
+
+.menu-list [role='menuitemradio'][aria-checked='true'] {
+  background: var(--selected);
+  font-weight: 600;
+}
+
+.theme-dots {
+  display: inline-flex;
+  flex: none;
+  border: 1px solid var(--rule-strong);
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.theme-dots span {
+  width: 10px;
+  height: 18px;
+}
+
+@media (max-width: 700px) {
+  .theme-menu {
+    order: 6;
+  }
 }

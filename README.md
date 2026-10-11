@@ -6,7 +6,7 @@ OpenWire is a free, open-source tool to draw wire harnesses. It operates in your
 
 > **NOTE:** This link operates after you publish the site. Refer to [Publish OpenWire on GitHub Pages](#publish-openwire-on-github-pages).
 
-The version number is in the top right corner of the page. This README is for version 0.4.1.
+The version number is in the top right corner of the page. This README is for version 0.5.0.
 
 ## What OpenWire does
 
@@ -29,7 +29,8 @@ The version number is in the top right corner of the page. This README is for ve
 - Export the drawing as an SVG file. The SVG file also contains the project, so OpenWire can open it again.
 - Download the cut list and the BOM as CSV files for a spreadsheet.
 - Print the drawing, the cut list and the BOM. Or save them as a PDF file.
-- Use OpenWire on a computer, a tablet or a phone, with a light theme or a dark theme.
+- Use OpenWire on a computer, a tablet or a phone.
+- Select a theme: OpenWire Light or Dark, Catppuccin (Latte, Frappé, Macchiato, Mocha) or VS Code (Dark Modern, Dark+, Light Modern). The theme also changes the colors of the drawing.
 
 ## Where OpenWire keeps your data
 
@@ -169,7 +170,7 @@ To add a photo to a connector:
 2. In the **Properties** tab, click **Add photo**.
 3. Select a picture. On a phone, you can also take a photo with the camera.
 
-The photo shows below the pins of the connector. To move the connector, you can also drag its photo.
+The photo shows in the middle of the connector, between the names of the left pins and the right pins. OpenWire makes the connector larger for the photo. On a splitter, the photo shows below the levers. To move the component, you can also drag its photo.
 
 ### Turn and crop a picture
 
@@ -216,6 +217,25 @@ The **Checks** tab shows errors, warnings and notes. The number on the tab shows
 2. In the print window, select **Save as PDF** as the printer. Or select a printer.
 
 The drawing is on the first page. The cut list and the BOM are on the next pages.
+
+## Select a theme
+
+1. Click the palette button in the top right corner.
+2. Select a theme.
+
+These themes are available:
+
+| Group | Themes |
+| --- | --- |
+| OpenWire | Same as this device, OpenWire Light, OpenWire Dark |
+| Catppuccin | Latte, Frappé, Macchiato, Mocha |
+| VS Code | Dark Modern, Dark+, Light Modern |
+
+The theme changes the colors of the app and of the drawing, including the background. The wire colors do not change.
+
+OpenWire keeps your theme in this browser. The theme is not in the project file.
+
+> **NOTE:** Printouts and exported SVG files always use the light colors, because they are for paper and for other programs.
 
 ## Keyboard shortcuts
 
@@ -305,7 +325,8 @@ Then open <http://localhost:8000> in your browser.
 ```text
 index.html         The page
 favicon.svg        The icon
-css/style.css      Styles: light theme, dark theme and print
+css/themes.css     Colors of each theme, for the app and the drawing
+css/style.css      Styles of the app, and print
 js/app.js          Commands, menu, keyboard, files and start
 js/model.js        Data, cut list, BOM and checks (no browser code)
 js/store.js        Project, selection, undo and redo
@@ -313,6 +334,7 @@ js/canvas.js       Drawing area, mouse and touch input, SVG export
 js/layout.js       Size of the components and position of the pins
 js/draw.js         Graphics of components, connector types, wires and cables
 js/version.js      Version number
+js/themes.js       Theme menu and the saved theme
 js/inspector.js    Properties tab
 js/tables.js       Cut list, BOM and Checks tabs
 js/report.js       Table data, CSV and HTML tables
@@ -335,3 +357,5 @@ fonts/             Barlow Semi Condensed font
 The OpenWire code uses the MIT License. Refer to [LICENSE](LICENSE).
 
 The font Barlow Semi Condensed uses the SIL Open Font License 1.1. Refer to [fonts/OFL.txt](fonts/OFL.txt).
+
+The Catppuccin colors come from [Catppuccin](https://catppuccin.com) (MIT License). The VS Code colors come from the Dark Modern, Dark+ and Light Modern themes of Visual Studio Code.

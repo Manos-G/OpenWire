@@ -35,14 +35,14 @@ export function createCanvas(wrap, store) {
     <svg class="ow canvas-svg" role="application" aria-label="Harness drawing" aria-describedby="canvas-hint">
       <defs>
         <pattern id="owg-minor" width="10" height="10" patternUnits="userSpaceOnUse">
-          <path d="M 10 0 L 0 0 0 10" fill="none" stroke="#e5ecf2"/>
+          <path class="grid-line-minor" d="M 10 0 L 0 0 0 10" fill="none"/>
         </pattern>
         <pattern id="owg-major" width="50" height="50" patternUnits="userSpaceOnUse">
-          <path d="M 50 0 L 0 0 0 50" fill="none" stroke="#cfd9e3"/>
+          <path class="grid-line-major" d="M 50 0 L 0 0 0 50" fill="none"/>
         </pattern>
         <style>${DIAGRAM_CSS}</style>
       </defs>
-      <rect class="grid grid-paper" width="100%" height="100%" fill="#ffffff"/>
+      <rect class="grid grid-paper" width="100%" height="100%"/>
       <rect class="grid grid-minor" width="100%" height="100%" fill="url(#owg-minor)"/>
       <rect class="grid grid-major" width="100%" height="100%" fill="url(#owg-major)"/>
       <g class="viewport">

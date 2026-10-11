@@ -85,6 +85,21 @@ function labelSpace(groups) {
   return Math.round(Math.min(LABEL_ZONE, Math.max(10, longest + 10)));
 }
 
+// Width of the pin names of the left or right side, when a photo is in the middle.
+function sideColumn(groups) {
+  let longest = 0;
+  for (const g of groups) {
+    const typed = (g.type || 'generic') !== 'generic';
+    for (const pin of g.pins) {
+      longest = Math.max(longest, (pin.label || '').length * CHAR_W + (typed ? 14 : 0) + (pin.role ? 24 : 0));
+    }
+    longest = Math.max(longest, groupCaption(g).length * 5.2 - HOUSING);
+  }
+  return Math.round(Math.min(150, Math.max(70, HOUSING + 12 + longest)));
+}
+
+const PHOTO_W = 150; // Width of a photo in the middle of a connector.
+
 function photoSize(c, project, width) {
   const img = project ? findImage(project, c.image) : null;
   if (!img) return null;
@@ -107,7 +122,20 @@ function layoutConnector(c, project) {
   const T = placeGroups(s.top, COL_W);
   const B = placeGroups(s.bottom, COL_W);
 
-  const width = Math.max(s.left.length && s.right.length ? TWO_SIDE_W : BOX_W, T.length + 2 * PAD + 16, B.length + 2 * PAD + 16);
+  // A photo goes in the middle, between the names of the left and right pins.
+  const img = project ? findImage(project, c.image) : null;
+  const view = img ? pictureView(img, c.photoRotation, c.photoCrop) : null;
+  const leftNames = img && s.left.length ? sideColumn(s.left) : 0;
+  const rightNames = img && s.right.length ? sideColumn(s.right) : 0;
+  const width = Math.max(
+    s.left.length && s.right.length ? TWO_SIDE_W : BOX_W,
+    T.length + 2 * PAD + 16,
+    B.length + 2 * PAD + 16,
+    img ? leftNames + rightNames + PHOTO_W + 2 * PHOTO_PAD : 0,
+  );
+  const twoSided = Boolean(s.left.length && s.right.length);
+  const leftCol = img ? leftNames : twoSided ? width / 2 : width;
+  const rightCol = img ? rightNames : twoSided ? width / 2 : width;
   const topLabels = s.top.length ? labelSpace(s.top) : 0;
   const bottomLabels = s.bottom.length ? labelSpace(s.bottom) : 0;
   // On the top and bottom sides, the group names go next to the connector graphic.
@@ -117,11 +145,23 @@ function layoutConnector(c, project) {
   const headY = topZone;
   const rowsTop = headY + HEAD_H;
   const sideLength = Math.max(L.length, R.length);
-  const rowsHeight = sideLength ? sideLength + 2 * PAD : s.top.length || s.bottom.length ? 8 : ROW_H;
+  let photo = null;
+  if (img) {
+    // The photo fits in the middle column, not higher than PHOTO_MAX_H.
+    const room = width - leftCol - rightCol - 2 * PHOTO_PAD;
+    let w = Math.min(room, 220);
+    let h = (w * view.height) / view.width;
+    if (h > PHOTO_MAX_H) {
+      h = PHOTO_MAX_H;
+      w = (h * view.width) / view.height;
+    }
+    photo = { img, width: Math.round(w), height: Math.round(h), x: Math.round(leftCol + PHOTO_PAD + (room - w) / 2), y: 0 };
+  }
+  const pinsHeight = sideLength ? sideLength + 2 * PAD : s.top.length || s.bottom.length ? 8 : ROW_H;
+  const rowsHeight = Math.max(pinsHeight, photo ? photo.height + 2 * PHOTO_PAD : 0);
   const rowsBottom = rowsTop + rowsHeight;
-  const photoInfo = photoSize(c, project, width);
-  const photo = photoInfo ? { ...photoInfo, x: PHOTO_PAD, y: rowsBottom + PHOTO_PAD } : null;
-  const bottomStart = rowsBottom + (photo ? photo.height + PHOTO_PAD * 2 : 0);
+  if (photo) photo.y = Math.round(rowsTop + (rowsHeight - photo.height) / 2);
+  const bottomStart = rowsBottom;
   const bottomZone = s.bottom.length ? HOUSING + bottomCaption + bottomLabels : 0;
   const height = bottomStart + bottomZone;
 
@@ -168,7 +208,10 @@ function layoutConnector(c, project) {
     groups,
     pins,
     photo,
-    twoSided: Boolean(s.left.length && s.right.length),
+    photoInside: Boolean(photo),
+    leftCol,
+    rightCol,
+    twoSided,
   };
 }
 
