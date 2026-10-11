@@ -5,7 +5,7 @@ import { backgroundRect, findConnector, findImage, findWire, makeWire, serialize
 import { escapeHtml as esc } from './report.js';
 import { pictureSvg } from './images.js';
 import { BOX_W, HEAD_H, ROW_H, layoutComponent, pinAnchor } from './layout.js';
-import { DIAGRAM_CSS, cablePath, connectorMarkup, labelMarkup, splitterMarkup, wireMarkup } from './draw.js';
+import { DIAGRAM_CSS, EXPORT_CSS, cablePath, connectorMarkup, labelMarkup, splitterMarkup, wireMarkup } from './draw.js';
 
 export { DIAGRAM_CSS };
 
@@ -714,7 +714,7 @@ export function createCanvas(wrap, store) {
       ? `<text class="ow-title" x="${x + pad}" y="${y + height - 16}">${esc(project.meta.name)}, revision ${esc(project.meta.revision)}</text>`
       : '';
     const declaration = xmlDeclaration ? '<?xml version="1.0" encoding="UTF-8"?>\n' : '';
-    return `${declaration}<svg xmlns="${SVG_NS}" class="ow" width="${width}" height="${height}" viewBox="${x} ${y} ${width} ${height}">${meta}<style>${DIAGRAM_CSS}</style><rect x="${x}" y="${y}" width="${width}" height="${height}" fill="#ffffff"/>${markup}${heading}</svg>`;
+    return `${declaration}<svg xmlns="${SVG_NS}" class="ow" width="${width}" height="${height}" viewBox="${x} ${y} ${width} ${height}">${meta}<style>${EXPORT_CSS}</style><rect x="${x}" y="${y}" width="${width}" height="${height}" fill="#ffffff"/>${markup}${heading}</svg>`;
   }
 
   applyView();

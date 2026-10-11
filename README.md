@@ -6,7 +6,7 @@ OpenWire is a free, open-source tool to draw wire harnesses. It operates in your
 
 > **NOTE:** This link operates after you publish the site. Refer to [Publish OpenWire on GitHub Pages](#publish-openwire-on-github-pages).
 
-The version number is in the top right corner of the page. This README is for version 0.5.0.
+The version number is in the top right corner of the page. This README is for version 0.5.1.
 
 ## What OpenWire does
 

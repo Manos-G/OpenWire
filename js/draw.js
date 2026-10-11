@@ -68,6 +68,10 @@ export const DIAGRAM_CSS = `
 .ow-fpc-text { fill: #ffffff; font-size: 7px; font-weight: 600; text-anchor: middle; }
 `;
 
+// The same styles with plain light colors, for exported SVG files. Many
+// programs do not understand CSS variables, so the export does not use them.
+export const EXPORT_CSS = DIAGRAM_CSS.replace(/var\(--[\w-]+,\s*([^)]+)\)/g, '$1');
+
 const r1 = (v) => Math.round(v * 10) / 10;
 const clamp = (v, min, max) => Math.min(max, Math.max(min, v));
 export const truncate = (text, max) => (text.length > max ? `${text.slice(0, Math.max(1, max - 1))}…` : text);
