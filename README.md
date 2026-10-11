@@ -6,7 +6,7 @@ OpenWire is a free, open-source tool to draw wire harnesses. It operates in your
 
 > **NOTE:** This link operates after you publish the site. Refer to [Publish OpenWire on GitHub Pages](#publish-openwire-on-github-pages).
 
-The version number is in the top right corner of the page. This README is for version 0.5.1.
+The version number is in the top right corner of the page. This README is for version 0.6.0.
 
 ## What OpenWire does
 
@@ -16,7 +16,7 @@ The version number is in the top right corner of the page. This README is for ve
 - Add splitters (lever connectors). Set the number of inputs and the number of outputs for each input.
 - Draw wires from pin to pin with a mouse, a pen or a finger.
 - Give each wire a color, a stripe, a gauge and a length. The colors use the IEC 60757 codes, for example BK, RD and GN. The drawing shows the name, the gauge and the length of each wire.
-- Change a wire to a USB cable. The drawing shows a plug at each end: USB-A, USB-B, USB-C, Micro-USB or Mini-USB.
+- Change a wire to a USB or DC cable. The drawing shows a plug at each end: USB-A, USB-B, USB-C, Micro-USB, Mini-USB or a DC barrel plug with its diameters.
 - Change a wire to a CSI or DSI flat cable for a Raspberry Pi camera or display. Each end is the standard 15-pin connector or the mini 22-pin connector.
 - See the cut list. OpenWire adds an extra length to each wire. You need this length to strip and crimp the wire.
 - See the bill of materials. OpenWire puts the parts with the same part number on one line.
@@ -25,7 +25,9 @@ The version number is in the top right corner of the page. This README is for ve
 - Put a background picture behind the harness, for example a photo of the vehicle or the panel.
 - Find problems in the **Checks** tab, for example a wire without a length.
 - Undo and redo all changes.
-- Save the project as a file on your computer. Open the file again at a later time.
+- Select several components and move them together.
+- Keep schematics (PDF files, pictures, KiCad files) with the project, in the **Schematics** tab.
+- Save the project as one ZIP file on your computer, with the schematics inside. Open the file again at a later time.
 - Export the drawing as an SVG file. The SVG file also contains the project, so OpenWire can open it again.
 - Download the cut list and the BOM as CSV files for a spreadsheet.
 - Print the drawing, the cut list and the BOM. Or save them as a PDF file.
@@ -130,14 +132,21 @@ Use one of these procedures:
 
 A new wire has no length. Type the length in the **Properties** tab. The new wire gets the color, the stripe and the gauge of the last wire.
 
-### Add a USB cable
+### Add a USB or DC cable
 
 1. Draw a wire between the two pins.
-2. In the **Properties** tab, set **Type** to **USB cable**.
-3. Select the plug at each end, for example USB-A and USB-C.
+2. In the **Properties** tab, set **Type** to **USB / DC cable**.
+3. Select the plug at each end, for example USB-A and USB-C, or **DC barrel plug**.
 4. Type the cable length, the part number and the price.
 
-A USB cable is not in the cut list, because you do not cut it from a reel. The BOM shows it as a cable. The next wire that you draw gets the same type as the last wire.
+If an end has a DC barrel plug, the **DC barrel plug** fields show:
+
+1. Select a **Common size**, for example 5.5 × 2.1 mm.
+2. Or type the **Outer diameter** and the **Inner (pin) diameter**.
+
+The label of the cable shows USB, DC or USB/DC. The BOM shows the plugs and the barrel size, for example "Cable, USB-A to DC barrel 5.5 × 2.1 mm".
+
+These cables are not in the cut list, because you do not cut them from a reel. The BOM shows them as cables. The next wire that you draw gets the same type as the last wire.
 
 ### Add a CSI or DSI flat cable
 
@@ -205,11 +214,34 @@ The cut length is the wire length plus the extra length per wire. The BOM counts
 
 The **Checks** tab shows errors, warnings and notes. The number on the tab shows the errors and the warnings. Click a line to select the item. Then correct the item in the **Properties** tab.
 
+### Select several components
+
+- Hold Shift (or Ctrl, or ⌘ on a Mac) and click a component to add it to the selection. Do this again to remove it.
+- Hold Shift and drag on an empty area to select all the components in a box.
+- On a touch screen, push the **Select** button (the dashed square) in the top bar. Then touch the components, or drag a box on an empty area. Push the button again to stop. Use two fingers to move the drawing.
+- Push Ctrl+A (⌘A on a Mac) to select all the components.
+
+Drag one of the selected components to move all of them. The arrow keys move them by 10, or by 50 with Shift. **Duplicate all** and **Delete all** are in the **Properties** tab. All the changes make one undo step.
+
+### Keep schematics with the project
+
+1. Click the **Schematics** tab.
+2. Click **Add files**, or drag the files into the tab. You can add PDF files, pictures, KiCad files and other files.
+3. Type a name and a note for each file, for example "Rev. B".
+
+- To see a file, click **Open** or click its picture. The browser shows PDF files and pictures in a new tab.
+- To get a copy of a file, click **Download**.
+- To remove a file, click **Delete**. Undo brings it back.
+
+OpenWire saves the schematics inside the project ZIP file. The files do not change.
+
 ### Save and open files
 
-- To save, click **File** > **Save**, or push Ctrl+S.
+- To save, click **File** > **Save**, or push Ctrl+S. OpenWire saves one ZIP file, for example `harness.openwire.zip`.
 - To open a file, click **File** > **Open**, or push Ctrl+O. You can also drag a file into the window.
-- OpenWire opens `.openwire.json` files and the SVG files that it exported.
+- OpenWire opens `.openwire.zip` files, `.openwire.json` files and the SVG files that it exported.
+- If you open a `.openwire.json` file, **Save** writes a `.openwire.json` file again. The schematic files are then inside the text.
+- To get the project as one JSON text file, click **File** > **Export project as JSON text**.
 
 ### Print or save as PDF
 
@@ -246,7 +278,11 @@ OpenWire keeps your theme in this browser. The theme is not in the project file.
 | Open | Ctrl+O | ⌘O |
 | Undo | Ctrl+Z | ⌘Z |
 | Redo | Ctrl+Shift+Z or Ctrl+Y | ⇧⌘Z or ⌘Y |
-| Duplicate the connector | Ctrl+D | ⌘D |
+| Duplicate the selected components | Ctrl+D | ⌘D |
+| Select all the components | Ctrl+A | ⌘A |
+| Add a component to the selection | Shift+click | ⇧ click |
+| Select the components in a box | Shift+drag | ⇧ drag |
+| Move the selected components | Arrow keys (Shift: 50) | Arrow keys (⇧: 50) |
 | Delete the selected item | Delete or Backspace | Delete |
 | Stop a wire, or clear the selection | Esc | Esc |
 | Zoom in or zoom out | + or − | + or − |
@@ -259,12 +295,21 @@ To move the drawing, drag the background, or scroll. To zoom, push Ctrl and scro
 | Browser | What Save does |
 | --- | --- |
 | Chrome, Edge and Opera on a computer | OpenWire saves to the same file again. The browser can ask for permission. |
-| Firefox and Safari | The browser downloads a new copy each time. It can add a number to the name, for example `harness (1).openwire.json`. |
+| Firefox and Safari | The browser downloads a new copy each time. It can add a number to the name, for example `harness (1).openwire.zip`. |
 | Phones and tablets | The browser downloads a new copy each time. |
 
 ## File format
 
-OpenWire saves projects as JSON text. You can compare two versions of a file in Git.
+OpenWire saves a project as a ZIP file (`.openwire.zip`). The ZIP file contains:
+
+```text
+project.json                       The project as JSON text
+schematics/<id>-<file name>        Each schematic file, not changed
+```
+
+You can open the ZIP file with any ZIP program. You can compare two versions of `project.json` in Git.
+
+`project.json` (and a `.openwire.json` file) has this structure:
 
 ```json
 {
@@ -304,6 +349,8 @@ OpenWire saves projects as JSON text. You can compare two versions of a file in 
 - A splitter has `"kind": "splitter"`, `poles` (inputs) and `outputs` (outputs for each input). Its pins are the inputs first, then the outputs of input 1, then the outputs of input 2.
 - A pin can have `"role": "in"` or `"role": "out"`.
 - A USB cable is a wire with `"kind": "usb"`, `usbA`, `usbB` and `price`.
+- `schematics` is the list of schematics: `id`, `file`, `name` and `note`. `files` gives the `name`, `type`, `size` and the `path` in the ZIP file of each file. In a `.openwire.json` file, each file also has its contents as a data URL (`data`).
+- A USB or DC cable can have `"usbA": "BARREL"` or `"usbB": "BARREL"`. Then `barrelOuter` and `barrelInner` give the diameters in mm.
 - A flat cable is a wire with `"kind": "flat"`, `flatUse` (`CSI` or `DSI`), `flatA` and `flatB` (`15` or `22`) and `price`.
 - The `version` number shows the format version. This version of OpenWire opens version 1.
 
@@ -335,6 +382,8 @@ js/layout.js       Size of the components and position of the pins
 js/draw.js         Graphics of components, connector types, wires and cables
 js/version.js      Version number
 js/themes.js       Theme menu and the saved theme
+js/schematics.js   Schematics tab
+js/zip.js          Read and write ZIP files (no other libraries)
 js/inspector.js    Properties tab
 js/tables.js       Cut list, BOM and Checks tabs
 js/report.js       Table data, CSV and HTML tables

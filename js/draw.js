@@ -59,6 +59,7 @@ export const DIAGRAM_CSS = `
 .ow-usb-shine { fill: none; stroke: #6b747d; stroke-width: 1; stroke-linecap: round; }
 .ow-plug-shell { fill: #c9ced3; stroke: #5d656d; stroke-width: 0.8; }
 .ow-plug-boot { fill: #2b3137; stroke: #111518; stroke-width: 0.8; }
+.ow-barrel-ring { stroke: #5d656d; stroke-width: 0.8; }
 .ow-plug-text { fill: #ffffff; font-size: 8.5px; font-weight: 600; text-anchor: middle; }
 .ow-flat-edge { fill: none; stroke: #8c8676; stroke-linecap: butt; }
 .ow-flat-core { fill: none; stroke: #f4efe2; stroke-linecap: butt; }
@@ -431,8 +432,28 @@ export function cablePath(a, b) {
 
 const angleOf = (dir) => (Math.atan2(dir.y, dir.x) * 180) / Math.PI;
 
+// A DC barrel plug: a metal sleeve and a round black grip. The sleeve gets
+// thicker for a larger outer diameter.
+function barrelPlug(point, outer) {
+  const k = 1.35;
+  const sleeveH = Math.min(9, Math.max(3.5, outer * 1.15));
+  const sleeveW = 10;
+  const gripW = 20;
+  const gripH = sleeveH + 5;
+  const along = k * (sleeveW + 1 + gripW / 2);
+  return `<g class="ow-plug ow-barrel">
+    <g transform="translate(${r1(point.x)} ${r1(point.y)}) rotate(${r1(angleOf(point.dir))}) scale(${k})">
+      <rect class="ow-plug-shell" x="1" y="${r1(-sleeveH / 2)}" width="${sleeveW}" height="${r1(sleeveH)}" rx="0.6"/>
+      <line class="ow-barrel-ring" x1="4" y1="${r1(-sleeveH / 2)}" x2="4" y2="${r1(sleeveH / 2)}"/>
+      <rect class="ow-plug-boot" x="${sleeveW + 1}" y="${r1(-gripH / 2)}" width="${gripW}" height="${r1(gripH)}" rx="${r1(gripH / 2)}"/>
+    </g>
+    <text class="ow-plug-text" x="${r1(point.x + point.dir.x * along)}" y="${r1(point.y + point.dir.y * along + 0.5)}" dominant-baseline="central">DC</text>
+  </g>`;
+}
+
 // A small USB plug at the end of a cable. The metal part points into the component.
-function usbPlug(point, type) {
+function usbPlug(point, type, w = null) {
+  if (type === 'BARREL') return barrelPlug(point, w ? w.barrelOuter : 5.5);
   const shell = {
     A: { w: 11, h: 9, rx: 0.8 },
     B: { w: 9, h: 9, rx: 2.5 },
@@ -478,7 +499,7 @@ export function wireMarkup(w, g, ends, selected) {
       <path class="ow-usb-outline" d="${g.d}"/>
       <path class="ow-usb-core" d="${g.d}"/>
       <path class="ow-usb-shine" d="${g.d}" transform="translate(0 -1)"/>
-      ${usbPlug(ends.a, w.usbA)}${usbPlug(ends.b, w.usbB)}${hit}
+      ${usbPlug(ends.a, w.usbA, w)}${usbPlug(ends.b, w.usbB, w)}${hit}
     </g>`;
   }
   if (isFlat(w)) {

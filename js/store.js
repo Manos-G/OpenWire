@@ -6,7 +6,7 @@
 //   'select'  the selection changed
 //   'history' undo or redo availability changed
 
-import { findConnector, findWire } from './model.js';
+import { componentSelection, findConnector, findWire } from './model.js';
 
 const HISTORY_LIMIT = 200;
 
@@ -14,7 +14,7 @@ const HISTORY_LIMIT = 200;
 // a restored step uses the pictures of the open project. Removed pictures stay
 // in memory until you save, so undo can bring them back.
 function snapshot(project) {
-  return JSON.stringify(project, (key, value) => (key === 'images' ? undefined : value));
+  return JSON.stringify(project, (key, value) => (key === 'images' || key === 'files' ? undefined : value));
 }
 
 export function createStore(initialProject) {
@@ -27,6 +27,15 @@ export function createStore(initialProject) {
 
   const emit = (type, info = {}) => {
     for (const listener of listeners) listener(type, info);
+  };
+
+  // Removes deleted items from the selection.
+  const fixSelection = () => {
+    if (selection?.type === 'multi') {
+      selection = componentSelection(selection.ids.filter((id) => findConnector(project, id)));
+    } else if (!selectionIsValid()) {
+      selection = null;
+    }
   };
 
   const selectionIsValid = () => {
@@ -62,7 +71,7 @@ export function createStore(initialProject) {
       coalesceKey = key;
       mutate(project);
       touch();
-      if (!selectionIsValid()) selection = null;
+      fixSelection();
       emit('change', info);
       emit('history');
     },
@@ -74,9 +83,9 @@ export function createStore(initialProject) {
     undo() {
       if (!past.length) return false;
       future.push(snapshot(project));
-      project = { ...JSON.parse(past.pop()), images: project.images };
+      project = { ...JSON.parse(past.pop()), images: project.images, files: project.files };
       coalesceKey = null;
-      if (!selectionIsValid()) selection = null;
+      fixSelection();
       emit('change', { source: 'history', structural: true });
       emit('history');
       return true;
@@ -85,9 +94,9 @@ export function createStore(initialProject) {
     redo() {
       if (!future.length) return false;
       past.push(snapshot(project));
-      project = { ...JSON.parse(future.pop()), images: project.images };
+      project = { ...JSON.parse(future.pop()), images: project.images, files: project.files };
       coalesceKey = null;
-      if (!selectionIsValid()) selection = null;
+      fixSelection();
       emit('change', { source: 'history', structural: true });
       emit('history');
       return true;
@@ -105,9 +114,8 @@ export function createStore(initialProject) {
     },
 
     select(next) {
-      const same =
-        (next === null && selection === null) ||
-        (next && selection && next.type === selection.type && next.id === selection.id);
+      const key = (sel) => (sel ? `${sel.type}:${sel.id || sel.ids.join(',')}` : '');
+      const same = key(next) === key(selection);
       if (same) return;
       selection = next;
       coalesceKey = null;

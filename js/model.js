@@ -24,11 +24,33 @@ export const USB_TYPES = [
   { code: 'C', name: 'USB-C' },
   { code: 'MICRO', name: 'Micro-USB' },
   { code: 'MINI', name: 'Mini-USB' },
+  { code: 'BARREL', name: 'DC barrel plug' },
 ];
+
+// Common DC barrel plug sizes: outer diameter × inner (pin) diameter, in mm.
+export const BARREL_SIZES = [
+  { outer: 5.5, inner: 2.1 },
+  { outer: 5.5, inner: 2.5 },
+  { outer: 4.0, inner: 1.7 },
+  { outer: 3.5, inner: 1.35 },
+  { outer: 3.0, inner: 1.1 },
+  { outer: 2.5, inner: 0.7 },
+  { outer: 6.3, inner: 3.0 },
+];
+
+const mmText = (n) => String(Math.round(n * 100) / 100);
+export const barrelSizeText = (w) => `${mmText(w.barrelOuter)} × ${mmText(w.barrelInner)} mm`;
 
 export function usbName(code) {
   return USB_TYPES.find((t) => t.code === code)?.name || code || '';
 }
+
+// Name of one end of a USB or DC cable, with the barrel size for a barrel plug.
+export function plugName(w, code) {
+  return code === 'BARREL' ? `DC barrel ${barrelSizeText(w)}` : usbName(code);
+}
+
+export const hasBarrel = (w) => w?.kind === 'usb' && (w.usbA === 'BARREL' || w.usbB === 'BARREL');
 
 // Raspberry Pi camera (CSI) and display (DSI) flat cables. Each end is the
 // standard 15-pin connector (1 mm pitch) or the mini 22-pin connector (0.5 mm pitch).
@@ -86,10 +108,24 @@ export const isFlat = (w) => w?.kind === 'flat';
 export const isCutWire = (w) => !w?.kind || w.kind === 'wire';
 export const WIRE_KINDS = [
   { code: 'wire', name: 'Wire' },
-  { code: 'usb', name: 'USB cable' },
+  { code: 'usb', name: 'USB / DC cable' },
   { code: 'flat', name: 'CSI/DSI flat cable' },
 ];
 export const componentNoun = (c) => (isSplitter(c) ? 'splitter' : 'connector');
+
+// The components in a selection: one connector or splitter, or several ('multi').
+export function selectedComponentIds(selection) {
+  if (selection?.type === 'connector') return [selection.id];
+  if (selection?.type === 'multi') return [...selection.ids];
+  return [];
+}
+
+export function componentSelection(ids) {
+  const unique = [...new Set(ids)];
+  if (unique.length > 1) return { type: 'multi', ids: unique };
+  if (unique.length === 1) return { type: 'connector', id: unique[0] };
+  return null;
+}
 
 // Wire insulation colors with IEC 60757 codes.
 export const WIRE_COLORS = [
@@ -179,7 +215,36 @@ export function createProject(name = 'Untitled harness') {
     connectors: [],
     wires: [],
     images: {},
+    schematics: [],
+    files: {},
   };
+}
+
+// ---------- Schematics ----------
+// A schematic is a file that you keep with the project, for example a PDF.
+// project.schematics is the list that you see. project.files holds the file
+// contents as Blobs. The undo history does not copy the files.
+
+export function addSchematic(project, { name, type, size, blob }) {
+  const fileId = newId('f');
+  project.files[fileId] = { name, type: type || 'application/octet-stream', size: size ?? blob?.size ?? 0, blob };
+  const item = { id: newId('s'), file: fileId, name: name.replace(/\.[^.]+$/, '') || name, note: '' };
+  project.schematics.push(item);
+  return item;
+}
+
+export function removeSchematic(project, id) {
+  project.schematics = project.schematics.filter((s) => s.id !== id);
+}
+
+export function schematicFile(project, item) {
+  return project.files?.[item?.file] || null;
+}
+
+// The path of a file in the ZIP package. A safe file name keeps the package easy to read.
+export function zipPath(fileId, name) {
+  const safe = String(name || 'file').replace(/[\\/:*?"<>|\u0000-\u001f]+/g, '_').slice(0, 120);
+  return `schematics/${fileId}-${safe}`;
 }
 
 // Returns the next free reference, for example X4 after X1, X2 and X3.
@@ -429,6 +494,8 @@ export function makeWire(project, from, to, template = null) {
     flatUse: template?.flatUse || 'CSI',
     flatA: template?.flatA || '15',
     flatB: template?.flatB || '15',
+    barrelOuter: template ? numberOr(template.barrelOuter, 5.5) : 5.5,
+    barrelInner: template ? numberOr(template.barrelInner, 2.1) : 2.1,
     price: template ? numberOr(template.price, 0) : 0,
   };
 }
@@ -607,7 +674,10 @@ export function boughtCables(project) {
 
 // Short text for the label of a wire in the drawing: the gauge, or the cable type.
 export function wireKindText(w) {
-  if (isUsb(w)) return 'USB';
+  if (isUsb(w)) {
+    const barrels = [w.usbA, w.usbB].filter((c) => c === 'BARREL').length;
+    return barrels === 2 ? 'DC' : barrels ? 'USB/DC' : 'USB';
+  }
   if (isFlat(w)) return w.flatUse || 'CSI';
   return w.gauge || '';
 }
@@ -684,7 +754,7 @@ export function billOfMaterials(project) {
     const length = isPositive(w.length) ? `, ${w.length} mm` : '';
     const description = isFlat(w)
       ? `${w.flatUse} flat cable, ${w.flatA}-pin to ${w.flatB}-pin${length}`
-      : `USB cable, ${usbName(w.usbA)} to ${usbName(w.usbB)}${length}`;
+      : `${hasBarrel(w) ? 'Cable' : 'USB cable'}, ${plugName(w, w.usbA)} to ${plugName(w, w.usbB)}${length}`;
     add(
       pn ? `cable:${pn}` : `cable:${description}`,
       { type: 'Cable', partNumber: pn, manufacturer: '', description, unit: 'pcs' },
@@ -775,17 +845,41 @@ export function runChecks(project) {
 
 // The pictures go last, so the text of the project stays easy to compare in Git.
 // Pictures that nothing uses are not saved.
-export function serializeProject(project) {
+// `fileData` (optional) maps a file id to a data URL. It is for a JSON file
+// that holds everything. A ZIP package stores the files next to project.json.
+export function serializeProject(project, { fileData = null } = {}) {
   const images = {};
   for (const id of referencedImages(project)) {
     if (project.images?.[id]) images[id] = project.images[id];
   }
+  const files = {};
+  for (const s of project.schematics || []) {
+    const f = project.files?.[s.file];
+    if (!f || files[s.file]) continue;
+    files[s.file] = { name: f.name, type: f.type, size: f.size, path: zipPath(s.file, f.name) };
+    if (fileData?.[s.file]) files[s.file].data = fileData[s.file];
+  }
   const { format, version, meta, settings, background, connectors, wires } = project;
+  const schematics = project.schematics || [];
   return JSON.stringify(
-    { format, version, meta, settings, background: background || null, connectors, wires, images },
+    { format, version, meta, settings, background: background || null, connectors, wires, schematics, files, images },
     null,
     2,
   );
+}
+
+// Blob from a data URL, for files inside a JSON project.
+function blobFromDataUrl(data) {
+  const match = /^data:([^;,]*)(;base64)?,(.*)$/s.exec(data || '');
+  if (!match) return null;
+  try {
+    const text = match[2] ? atob(match[3]) : decodeURIComponent(match[3]);
+    const bytes = new Uint8Array(text.length);
+    for (let i = 0; i < text.length; i += 1) bytes[i] = text.charCodeAt(i);
+    return new Blob([bytes], { type: match[1] || 'application/octet-stream' });
+  } catch {
+    return null;
+  }
 }
 
 // Checks a loaded object and returns a clean project.
@@ -817,6 +911,26 @@ export function normalizeProject(raw) {
     cutMargin: Math.max(0, numberOr(settings.cutMargin, 20)),
     currency: str(settings.currency, '€'),
   };
+
+  // Schematic files. The contents come from the ZIP package, from data URLs in
+  // a JSON file, or from the draft in this browser. A file with no contents
+  // stays in the list, so that you can see that it is missing.
+  const rawFiles = raw.files && typeof raw.files === 'object' ? raw.files : {};
+  for (const [id, f] of Object.entries(rawFiles)) {
+    if (!f || typeof f !== 'object') continue;
+    const blob = typeof f.data === 'string' ? blobFromDataUrl(f.data) : null;
+    project.files[id] = {
+      name: str(f.name, 'file'),
+      type: str(f.type, 'application/octet-stream'),
+      size: Math.max(0, numberOr(f.size, blob?.size ?? 0)),
+      path: str(f.path) || zipPath(id, f.name),
+      blob,
+    };
+  }
+  for (const s of arr(raw.schematics)) {
+    if (!s || typeof s !== 'object' || !project.files[s.file]) continue;
+    project.schematics.push({ id: str(s.id) || newId('s'), file: s.file, name: str(s.name, 'Schematic'), note: str(s.note) });
+  }
 
   const rawImages = raw.images && typeof raw.images === 'object' ? raw.images : {};
   for (const [id, img] of Object.entries(rawImages)) {
@@ -958,6 +1072,8 @@ export function normalizeProject(raw) {
       flatUse: FLAT_USES.some((t) => t.code === w.flatUse) ? w.flatUse : 'CSI',
       flatA: FLAT_ENDS.some((t) => t.code === w.flatA) ? w.flatA : '15',
       flatB: FLAT_ENDS.some((t) => t.code === w.flatB) ? w.flatB : '15',
+      barrelOuter: Math.min(30, Math.max(0.5, numberOr(w.barrelOuter, 5.5))),
+      barrelInner: Math.min(20, Math.max(0.1, numberOr(w.barrelInner, 2.1))),
       price: numberOr(w.price, 0),
     });
   }

@@ -10,6 +10,8 @@ import {
   makeConnector,
   makeSplitter,
   cleanCrop,
+  componentSelection,
+  selectedComponentIds,
   pictureView,
   turnRotation,
   removeConnector,
@@ -23,8 +25,11 @@ import { createInspector } from './inspector.js';
 import { createTables } from './tables.js';
 import { bomTable, cutListTable, escapeHtml as esc, tableHtml, toCsv, toTsv } from './report.js';
 import {
+  JSON_EXTENSION,
   PROJECT_EXTENSION,
+  buildProjectFile,
   canWriteInPlace,
+  isJsonName,
   drafts,
   fileBaseName,
   parseProjectText,
@@ -34,6 +39,7 @@ import {
 } from './files.js';
 import { BACKGROUND_MAX_SIZE, PHOTO_MAX_SIZE, isImageFile, loadPicture, pickImageFile } from './images.js';
 import { openCropDialog } from './crop.js';
+import { createSchematics } from './schematics.js';
 import { VERSION } from './version.js';
 import { buildThemeMenu, setTheme, themeName } from './themes.js';
 
@@ -53,6 +59,14 @@ createInspector($('panel-properties'), store);
 createTables({ cutlist: $('panel-cutlist'), bom: $('panel-bom'), checks: $('panel-checks') }, store, {
   badge: $('checks-badge'),
   onSelect: selectFromList,
+});
+const schematics = createSchematics($('panel-schematics'), store, {
+  toast: (...args) => toast(...args),
+  onCount: (n) => {
+    const badge = $('schematics-count');
+    badge.hidden = n === 0;
+    badge.textContent = String(n);
+  },
 });
 
 // The file that holds the project. `handle` exists only in Chrome and Edge.
@@ -98,8 +112,11 @@ let draftTimer = 0;
 function writeDraft() {
   clearTimeout(draftTimer);
   draftTimer = 0;
+  const files = {};
+  for (const [id, f] of Object.entries(store.project.files || {})) if (f.blob) files[id] = f.blob;
   drafts.save({
     json: serializeProject(store.project),
+    files,
     dirty: file.dirty,
     fileName: file.name,
     savedAt: new Date().toISOString(),
@@ -218,14 +235,22 @@ function savedMessage(result) {
     : `Saved ${result.name}.`;
 }
 
-async function saveProject({ asNew = false } = {}) {
+// A project is saved as a ZIP package. A project that was opened from a .json
+// file is saved as .json again (with the schematic files inside the text).
+async function saveProject({ asNew = false, format = null } = {}) {
   const project = store.project;
-  const suggestedName = !asNew && file.name ? file.name : `${fileBaseName(project.meta.name)}${PROJECT_EXTENSION}`;
+  const keepJson = !asNew && file.name && isJsonName(file.name);
+  const kind = format || (keepJson ? 'json' : 'zip');
+  const base = fileBaseName(project.meta.name);
+  const suggestedName = !asNew && file.name && kind === (isJsonName(file.name) ? 'json' : 'zip')
+    ? file.name
+    : `${base}${kind === 'json' ? JSON_EXTENSION : PROJECT_EXTENSION}`;
   try {
-    const result = await saveFile(serializeProject(project), {
-      handle: asNew ? null : file.handle,
+    const contents = await buildProjectFile(project, kind);
+    const result = await saveFile(contents, {
+      handle: asNew || format ? null : file.handle,
       suggestedName,
-      kind: 'project',
+      kind: kind === 'json' ? 'project' : 'zip',
     });
     if (!result) return;
     file.handle = result.handle;
@@ -294,22 +319,70 @@ function addSplitter() {
 }
 
 function duplicateSelection() {
-  const sel = store.selection;
-  if (sel?.type !== 'connector') return;
-  let copy = null;
+  const ids = selectedComponentIds(store.selection);
+  if (!ids.length) return;
+  const copies = [];
   store.update(
     (project) => {
-      copy = duplicateConnector(project, sel.id);
+      for (const id of ids) {
+        const copy = duplicateConnector(project, id);
+        if (copy) copies.push(copy.id);
+      }
     },
     { source: 'app', structural: true },
   );
-  if (copy) store.select({ type: 'connector', id: copy.id });
+  store.select(componentSelection(copies));
+}
+
+// Moves the selected components with the arrow keys. Each run of key presses is one undo step.
+function nudgeSelection(dx, dy) {
+  const ids = selectedComponentIds(store.selection);
+  if (!ids.length) return false;
+  store.update(
+    (project) => {
+      for (const id of ids) {
+        const c = findConnector(project, id);
+        if (c) {
+          c.x += dx;
+          c.y += dy;
+        }
+      }
+    },
+    { source: 'app', kind: 'move', coalesce: `nudge:${ids.join(',')}` },
+  );
+  return true;
+}
+
+function selectAll() {
+  const ids = store.project.connectors.map((c) => c.id);
+  store.select(componentSelection(ids));
+  if (ids.length > 1) toast(`Selected ${ids.length} components.`);
+}
+
+function toggleSelectMode() {
+  const on = !canvas.selectMode;
+  canvas.setSelectMode(on);
+  const button = document.querySelector('[data-cmd="select-mode"]');
+  button?.setAttribute('aria-pressed', String(on));
+  toast(on ? 'Select mode is on. Tap components, or drag a box around them.' : 'Select mode is off.');
 }
 
 function deleteSelection() {
   const sel = store.selection;
   if (!sel) return;
   const project = store.project;
+  if (sel.type === 'multi') {
+    const ids = new Set(sel.ids);
+    const count = project.wires.filter((w) => ids.has(w.from.connector) || ids.has(w.to.connector)).length;
+    store.update(
+      (p) => {
+        for (const id of ids) removeConnector(p, id);
+      },
+      { source: 'app', structural: true },
+    );
+    toast(`Deleted ${ids.size} components${count ? ` and ${count} ${count === 1 ? 'wire' : 'wires'}` : ''}. Undo brings them back.`);
+    return;
+  }
   if (sel.type === 'connector') {
     const c = findConnector(project, sel.id);
     if (!c) return;
@@ -559,6 +632,7 @@ const commands = {
   open: openFromPicker,
   save: () => saveProject(),
   'save-as': () => saveProject({ asNew: true }),
+  'export-json': () => saveProject({ format: 'json' }),
   'export-svg': () => exportFile(canvas.exportSvg(), `${baseName()}.svg`, 'svg'),
   'export-cutlist': () => exportFile(toCsv(cutListTable(store.project)), `${baseName()}-cut-list.csv`, 'csv'),
   'export-bom': () => exportFile(toCsv(bomTable(store.project)), `${baseName()}-bom.csv`, 'csv'),
@@ -580,6 +654,8 @@ const commands = {
   'add-background': chooseBackground,
   'remove-background': removeBackground,
   'add-splitter': addSplitter,
+  'select-mode': toggleSelectMode,
+  'select-all': selectAll,
   'photo-turn': turnPicture,
   'photo-crop': cropPicture,
   'photo-reset': resetPicture,
@@ -706,6 +782,9 @@ document.addEventListener('keydown', (e) => {
     } else if (!editable && key === 'd') {
       e.preventDefault();
       run('duplicate');
+    } else if (!editable && key === 'a') {
+      e.preventDefault();
+      run('select-all');
     }
     return;
   }
@@ -729,6 +808,10 @@ document.addEventListener('keydown', (e) => {
     run('zoom-out');
   } else if (key === 'f') {
     run('fit');
+  } else if (key.startsWith('Arrow')) {
+    const step = e.shiftKey ? 50 : 10;
+    const d = { ArrowLeft: [-step, 0], ArrowRight: [step, 0], ArrowUp: [0, -step], ArrowDown: [0, step] }[key];
+    if (d && nudgeSelection(...d)) e.preventDefault();
   }
 });
 
@@ -747,6 +830,11 @@ window.addEventListener('drop', (e) => {
   e.preventDefault();
   const dropped = e.dataTransfer.files?.[0];
   if (!dropped) return;
+  // In the Schematics tab, all dropped files become schematics.
+  if (!$('panel-schematics').hidden) {
+    schematics.addFiles([...e.dataTransfer.files]);
+    return;
+  }
   if (isImageFile(dropped)) {
     dropPicture(dropped);
     return;
@@ -806,7 +894,11 @@ async function start() {
   const draft = await drafts.load();
   if (draft?.json) {
     try {
-      store.replace(parseProjectText(draft.json, 'draft.json'));
+      const restoredProject = parseProjectText(draft.json, 'draft.json');
+      for (const [id, blob] of Object.entries(draft.files || {})) {
+        if (restoredProject.files[id] && blob instanceof Blob) restoredProject.files[id].blob = blob;
+      }
+      store.replace(restoredProject);
       file.name = draft.fileName || null;
       file.dirty = Boolean(draft.dirty);
       const handle = file.name && canWriteInPlace ? await drafts.loadHandle() : null;

@@ -5,7 +5,10 @@
 // focus make one undo step. The buttons use data-cmd, so app.js runs them.
 
 import {
+  BARREL_SIZES,
   CONNECTOR_TYPES,
+  barrelSizeText,
+  hasBarrel,
   FLAT_ENDS,
   FLAT_USES,
   GAUGES,
@@ -314,6 +317,24 @@ export function createInspector(root, store) {
     }).join('');
   }
 
+  function renderMulti(items) {
+    const p = store.project;
+    const ids = new Set(items.map((c) => c.id));
+    const inside = p.wires.filter((w) => ids.has(w.from.connector) && ids.has(w.to.connector)).length;
+    const touching = p.wires.filter((w) => ids.has(w.from.connector) || ids.has(w.to.connector)).length;
+    const list = items.map((c) => `<li><strong>${esc(c.ref)}</strong> ${esc(c.partNumber || (isSplitter(c) ? 'Splitter' : 'Connector'))}</li>`).join('');
+    return `
+      <h2 class="props-title">${items.length} components selected</h2>
+      <p class="props-sub">${plural(touching, 'wire connects', 'wires connect')} to them, ${inside} between them.</p>
+      <ul class="multi-list">${list}</ul>
+      <p class="props-hint">Drag one of them to move all of them. The arrow keys move them by 10, or by 50 with Shift.
+        Shift-click a component to add it to the selection or to remove it.</p>
+      <div class="props-actions">
+        <button type="button" class="button" data-cmd="duplicate">Duplicate all</button>
+        <button type="button" class="button danger" data-cmd="delete">Delete all</button>
+      </div>`;
+  }
+
   function renderConnector(c) {
     const p = store.project;
     const currency = p.settings.currency;
@@ -419,10 +440,28 @@ export function createInspector(root, store) {
     return `${endLabel(p, end)}${label ? ` (${label})` : ''}`;
   }
 
+  function barrelFields(w) {
+    if (!hasBarrel(w)) return '';
+    const current = BARREL_SIZES.find((b) => b.outer === w.barrelOuter && b.inner === w.barrelInner);
+    const options = [
+      ...BARREL_SIZES.map((b) => ({ code: `${b.outer}x${b.inner}`, name: barrelSizeText({ barrelOuter: b.outer, barrelInner: b.inner }) })),
+      { code: 'other', name: 'Other size' },
+    ];
+    return `
+      <h3 class="section-title">DC barrel plug</h3>
+      ${selectField({ field: 'barrelSize', label: 'Common size', value: current ? `${current.outer}x${current.inner}` : 'other', options })}
+      <div class="field-row">
+        ${numberField({ field: 'barrelOuter', label: 'Outer diameter', value: w.barrelOuter, unit: 'mm', step: 0.05, min: 0.5 })}
+        ${numberField({ field: 'barrelInner', label: 'Inner (pin) diameter', value: w.barrelInner, unit: 'mm', step: 0.05, min: 0.1 })}
+      </div>
+      <p class="field-help">For example 5.5 × 2.1 mm: the outer diameter is 5.5 mm and the hole for the center pin is 2.1 mm.</p>`;
+  }
+
   function renderUsb(w) {
     const currency = store.project.settings.currency;
+    const noun = hasBarrel(w) ? (w.usbA === 'BARREL' && w.usbB === 'BARREL' ? 'DC cable' : 'USB / DC cable') : 'USB cable';
     return `
-      <h2 class="props-title" data-title="USB cable">USB cable ${esc(w.ref)}</h2>
+      <h2 class="props-title" data-title="${noun}">${noun} ${esc(w.ref)}</h2>
       <p class="props-sub">From ${esc(endText(w.from))} to ${esc(endText(w.to))}</p>
       <div class="field-row">
         ${textField({ field: 'ref', label: 'Name', value: w.ref, maxlength: 20 })}
@@ -432,6 +471,7 @@ export function createInspector(root, store) {
         ${selectField({ field: 'usbA', label: `Plug at ${endLabel(store.project, w.from)}`, value: w.usbA, options: USB_TYPES })}
         ${selectField({ field: 'usbB', label: `Plug at ${endLabel(store.project, w.to)}`, value: w.usbB, options: USB_TYPES })}
       </div>
+      ${barrelFields(w)}
       <div class="field-row">
         ${numberField({ field: 'length', label: 'Cable length', value: w.length ?? '', unit: 'mm', step: 1, placeholder: 'For example 1000' })}
         ${textField({ field: 'signal', label: 'Use', value: w.signal, placeholder: 'For example data', maxlength: 60 })}
@@ -440,7 +480,7 @@ export function createInspector(root, store) {
         ${textField({ field: 'partNumber', label: 'Part number', value: w.partNumber })}
         ${numberField({ field: 'price', label: 'Price', value: w.price || '', unit: currency, step: 0.01 })}
       </div>
-      <p class="field-help">A USB cable is not in the cut list. The BOM shows it as a cable.</p>
+      <p class="field-help">This cable is not in the cut list. The BOM shows it as a cable.</p>
       <div class="props-actions">
         <button type="button" class="button" data-cmd="swap-ends">Swap ends</button>
         <button type="button" class="button danger" data-cmd="delete">Delete cable</button>
@@ -517,8 +557,11 @@ export function createInspector(root, store) {
 
   // ---------- Rendering ----------
 
+  const PANEL_FIELDS = new Set(['kind', 'usbA', 'usbB', 'barrelSize']);
+
   function selectedItem() {
     const sel = store.selection;
+    if (sel?.type === 'multi') return { type: 'multi', item: sel.ids.map((id) => findConnector(store.project, id)).filter(Boolean) };
     if (sel?.type === 'connector') return { type: 'connector', item: findConnector(store.project, sel.id) };
     if (sel?.type === 'wire') return { type: 'wire', item: findWire(store.project, sel.id) };
     return { type: 'project', item: null };
@@ -547,6 +590,7 @@ export function createInspector(root, store) {
 
     if (type === 'connector' && item) root.innerHTML = isSplitter(item) ? renderSplitter(item) : renderConnector(item);
     else if (type === 'wire' && item) root.innerHTML = renderWire(item);
+    else if (type === 'multi') root.innerHTML = renderMulti(item);
     else root.innerHTML = renderProject();
     refreshOutputs();
     root.scrollTop = scroll;
@@ -620,6 +664,15 @@ export function createInspector(root, store) {
       w[field] = raw;
     } else if (field === 'price') {
       w.price = money(raw);
+    } else if (field === 'barrelSize') {
+      const [outer, inner] = raw.split('x').map(Number);
+      if (outer > 0 && inner > 0) {
+        w.barrelOuter = outer;
+        w.barrelInner = inner;
+      }
+    } else if (field === 'barrelOuter' || field === 'barrelInner') {
+      const n = numberOr(raw, null);
+      if (isPositive(n)) w[field] = n;
     } else if (field === 'length') {
       const n = numberOr(raw, null);
       w.length = isPositive(n) ? n : null;
@@ -654,10 +707,10 @@ export function createInspector(root, store) {
           if (w) setWireField(w, field, raw);
         }
       },
-      // A new type needs a different panel, so it is a structural change.
-      field === 'kind' ? { source: 'inspector', structural: true } : { source: 'inspector', coalesce: key },
+      // These fields change which fields the panel shows, so the panel draws again.
+      PANEL_FIELDS.has(field) ? { source: 'inspector', structural: true } : { source: 'inspector', coalesce: key },
     );
-    if (field === 'kind') return;
+    if (PANEL_FIELDS.has(field)) return;
 
     const output = root.querySelector(`[data-output-for="${field}"]`);
     if (output) output.textContent = `${el.value} %`;

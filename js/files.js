@@ -5,15 +5,24 @@
 // Chrome and Edge on the desktop can write back to the same file.
 // Other browsers download a new copy each time you save.
 
-import { normalizeProject } from './model.js';
+import { normalizeProject, serializeProject } from './model.js';
 import { DATA_NS } from './canvas.js';
+import { looksLikeZip, readZip, writeZip } from './zip.js';
 
-export const PROJECT_EXTENSION = '.openwire.json';
+// A project is saved as a ZIP package: project.json and the schematic files.
+// OpenWire also opens and saves the older .openwire.json text files.
+export const PROJECT_EXTENSION = '.openwire.zip';
+export const JSON_EXTENSION = '.openwire.json';
+export const isJsonName = (name) => /\.json$/i.test(name || '');
 
 export const FILE_TYPES = {
   project: {
     types: [{ description: 'OpenWire project', accept: { 'application/json': ['.json'] } }],
     mime: 'application/json',
+  },
+  zip: {
+    types: [{ description: 'OpenWire project', accept: { 'application/zip': ['.zip'] } }],
+    mime: 'application/zip',
   },
   svg: {
     types: [{ description: 'SVG drawing', accept: { 'image/svg+xml': ['.svg'] } }],
@@ -28,7 +37,7 @@ export const FILE_TYPES = {
 const OPEN_TYPES = [
   {
     description: 'OpenWire project or drawing',
-    accept: { 'application/json': ['.json'], 'image/svg+xml': ['.svg'] },
+    accept: { 'application/zip': ['.zip'], 'application/json': ['.json'], 'image/svg+xml': ['.svg'] },
   },
 ];
 
@@ -90,8 +99,60 @@ export function parseProjectText(text, fileName = '') {
   return normalizeProject(raw);
 }
 
+// Reads a project from a ZIP package, a .json file or an exported .svg file.
 export async function readProjectFile(file) {
-  return parseProjectText(await file.text(), file.name);
+  const head = new Uint8Array(await file.slice(0, 4).arrayBuffer());
+  if (!looksLikeZip(head)) return parseProjectText(await file.text(), file.name);
+  let entries;
+  try {
+    entries = await readZip(file);
+  } catch (error) {
+    throw new Error(`OpenWire cannot read this ZIP file. ${error.message}`);
+  }
+  const json = entries.get('project.json');
+  if (!json) throw new Error('This ZIP file is not an OpenWire project. It has no project.json file.');
+  const project = parseProjectText(new TextDecoder().decode(json), 'project.json');
+  for (const f of Object.values(project.files)) {
+    const bytes = entries.get(f.path);
+    if (bytes) f.blob = new Blob([bytes], { type: f.type });
+  }
+  return project;
+}
+
+function blobToDataUrl(blob) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = () => reject(reader.error);
+    reader.readAsDataURL(blob);
+  });
+}
+
+// Makes the contents of a project file: a ZIP package, or JSON text.
+export async function buildProjectFile(project, format) {
+  if (format === 'json') {
+    const fileData = {};
+    for (const s of project.schematics) {
+      const f = project.files[s.file];
+      if (f?.blob && !fileData[s.file]) fileData[s.file] = await blobToDataUrl(f.blob);
+    }
+    return serializeProject(project, { fileData });
+  }
+  const entries = [{ name: 'project.json', data: serializeProject(project), compress: true }];
+  const done = new Set();
+  for (const s of project.schematics) {
+    const f = project.files[s.file];
+    if (!f?.blob || done.has(s.file)) continue;
+    done.add(s.file);
+    // Text files (for example KiCad files) are compressed. PDF and pictures are already compressed.
+    const text = /^text\/|json|xml|svg/.test(f.type) || /\.(kicad_\w+|sch|net|txt|csv)$/i.test(f.name);
+    entries.push({ name: pathOf(s.file, f), data: f.blob, compress: text });
+  }
+  return writeZip(entries);
+}
+
+function pathOf(id, f) {
+  return f.path || `schematics/${id}-${f.name}`;
 }
 
 function pickWithInput(accept) {
@@ -123,7 +184,7 @@ export async function pickProjectFile() {
       throw error;
     }
   }
-  const file = await pickWithInput('.json,.svg,application/json,image/svg+xml');
+  const file = await pickWithInput('.zip,.json,.svg,application/zip,application/json,image/svg+xml');
   return file ? { file, handle: null } : null;
 }
 
@@ -232,14 +293,15 @@ function localGet() {
 
 function localSet(record) {
   try {
-    localStorage.setItem(LOCAL_KEY, JSON.stringify(record));
+    // localStorage keeps only text, so the schematic files are not in this copy.
+    localStorage.setItem(LOCAL_KEY, JSON.stringify({ ...record, files: undefined }));
   } catch {
     /* No storage is available. The draft is not kept. */
   }
 }
 
 export const drafts = {
-  // Returns { json, dirty, fileName, savedAt } or null.
+  // Returns { json, files, dirty, fileName, savedAt } or null. `files` maps a file id to a Blob.
   async load() {
     try {
       const record = await kv('readonly', (store) => store.get('draft'));

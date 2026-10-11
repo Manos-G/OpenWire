@@ -1,7 +1,16 @@
 // Drawing area. Renders the harness as SVG and handles mouse, pen and touch input.
 // layout.js gives the size and pin positions. draw.js gives the SVG markup.
 
-import { backgroundRect, findConnector, findImage, findWire, makeWire, serializeProject } from './model.js';
+import {
+  backgroundRect,
+  componentSelection,
+  findConnector,
+  findImage,
+  findWire,
+  makeWire,
+  selectedComponentIds,
+  serializeProject,
+} from './model.js';
 import { escapeHtml as esc } from './report.js';
 import { pictureSvg } from './images.js';
 import { BOX_W, HEAD_H, ROW_H, layoutComponent, pinAnchor } from './layout.js';
@@ -53,6 +62,7 @@ export function createCanvas(wrap, store) {
           <g class="layer-labels"></g>
         </g>
         <path class="ow-temp" d="" display="none"/>
+        <rect class="ow-box" display="none"/>
       </g>
     </svg>
     <div class="canvas-empty" hidden>
@@ -74,6 +84,8 @@ export function createCanvas(wrap, store) {
     labels: svg.querySelector('.layer-labels'),
   };
   const temp = svg.querySelector('.ow-temp');
+  const box = svg.querySelector('.ow-box');
+  let selectMode = false; // Select several components with taps and a box (for touch screens).
   const minorPattern = svg.querySelector('#owg-minor');
   const majorPattern = svg.querySelector('#owg-major');
   const minorRect = svg.querySelector('.grid-minor');
@@ -263,6 +275,10 @@ export function createCanvas(wrap, store) {
       text = touch
         ? 'Tap the pin at the other end of the wire. Tap the background to stop.'
         : 'Click the pin at the other end of the wire. Press Esc to stop.';
+    } else if (selectMode) {
+      text = touch
+        ? 'Select mode: tap components to select them, or drag on an empty area. Use two fingers to move the drawing.'
+        : 'Select mode: click components to select them, or drag on an empty area.';
     } else if (connectors.length && !wires.length) {
       text = touch
         ? 'To add a wire, tap a pin and then tap a different pin.'
@@ -276,6 +292,7 @@ export function createCanvas(wrap, store) {
     const project = store.project;
     const sel = store.selection;
     const layouts = new Map(project.connectors.map((c) => [c.id, layoutComponent(c, project)]));
+    const selectedIds = new Set(selectedComponentIds(sel));
     const used = new Set();
     const wires = [];
     const labels = [];
@@ -297,7 +314,7 @@ export function createCanvas(wrap, store) {
     layers.wires.innerHTML = wires.join('');
     layers.connectors.innerHTML = project.connectors
       .map((c) => {
-        const options = { used, selected: sel?.type === 'connector' && sel.id === c.id };
+        const options = { used, selected: selectedIds.has(c.id) };
         const L = layouts.get(c.id);
         return c.kind === 'splitter' ? splitterMarkup(c, L, options) : connectorMarkup(c, L, options);
       })
@@ -463,9 +480,30 @@ export function createCanvas(wrap, store) {
       const c = findConnector(store.project, id);
       if (!c) return;
       const p = toWorld(e.clientX, e.clientY);
+      // Shift, Ctrl or ⌘ (or the select mode) adds the component to the selection,
+      // or removes it on a tap. Dragging moves all selected components together.
+      const additive = selectMode || e.shiftKey || e.ctrlKey || e.metaKey;
+      let ids = selectedComponentIds(store.selection);
+      let removeOnTap = false;
+      if (additive) {
+        if (ids.includes(id)) removeOnTap = true;
+        else ids = [...ids, id];
+      } else if (!ids.includes(id)) {
+        ids = [id];
+      }
+      store.select(componentSelection(ids));
+      const starts = new Map(
+        ids.map((cid) => {
+          const comp = findConnector(store.project, cid);
+          return [cid, { x: comp.x, y: comp.y }];
+        }),
+      );
       gesture = {
         type: 'drag',
         id,
+        ids,
+        starts,
+        removeOnTap,
         token: `${id}:${e.timeStamp}:${Math.random()}`,
         offsetX: p.x - c.x,
         offsetY: p.y - c.y,
@@ -473,7 +511,6 @@ export function createCanvas(wrap, store) {
         startY: e.clientY,
         moved: false,
       };
-      store.select({ type: 'connector', id });
       return;
     }
 
@@ -499,8 +536,36 @@ export function createCanvas(wrap, store) {
       return;
     }
 
+    // Shift-drag (or a drag in select mode) on an empty area selects the components in a box.
+    if (!middle && (selectMode || e.shiftKey)) {
+      const p = toWorld(e.clientX, e.clientY);
+      gesture = {
+        type: 'box',
+        from: p,
+        base: e.shiftKey || selectMode ? selectedComponentIds(store.selection) : [],
+        startX: e.clientX,
+        startY: e.clientY,
+        moved: false,
+      };
+      return;
+    }
+
     gesture = { type: 'pan', startX: e.clientX, startY: e.clientY, viewX: view.x, viewY: view.y, moved: false };
     svg.classList.add('is-panning');
+  }
+
+  function boxRect(a, b) {
+    return { x: Math.min(a.x, b.x), y: Math.min(a.y, b.y), w: Math.abs(b.x - a.x), h: Math.abs(b.y - a.y) };
+  }
+
+  function componentsIn(r) {
+    const project = store.project;
+    return project.connectors
+      .filter((c) => {
+        const L = layoutComponent(c, project);
+        return c.x < r.x + r.w && c.x + L.width > r.x && c.y < r.y + r.h && c.y + L.height > r.y;
+      })
+      .map((c) => c.id);
   }
 
   function onPointerMove(e) {
@@ -538,19 +603,35 @@ export function createCanvas(wrap, store) {
         const y = snap(p.y - gesture.offsetY);
         const c = findConnector(store.project, gesture.id);
         if (c && (c.x !== x || c.y !== y)) {
-          const { id, token } = gesture;
+          // All selected components move by the same distance as the one you drag.
+          const start = gesture.starts.get(gesture.id);
+          const dx = x - start.x;
+          const dy = y - start.y;
+          const { starts, token } = gesture;
           store.update(
             (project) => {
-              const target = findConnector(project, id);
-              if (target) {
-                target.x = x;
-                target.y = y;
+              for (const [cid, s] of starts) {
+                const target = findConnector(project, cid);
+                if (target) {
+                  target.x = s.x + dx;
+                  target.y = s.y + dy;
+                }
               }
             },
             { source: 'canvas', kind: 'move', coalesce: `move:${token}` },
           );
         }
         break;
+      }
+      case 'box': {
+        if (!gesture.moved && Math.hypot(e.clientX - gesture.startX, e.clientY - gesture.startY) < 4) return;
+        gesture.moved = true;
+        const r = boxRect(gesture.from, toWorld(e.clientX, e.clientY));
+        box.setAttribute('x', round(r.x));
+        box.setAttribute('y', round(r.y));
+        box.setAttribute('width', round(r.w));
+        box.setAttribute('height', round(r.h));
+        box.removeAttribute('display');
       }
       case 'bg': {
         if (!gesture.moved && Math.hypot(e.clientX - gesture.startX, e.clientY - gesture.startY) < 3) return;
@@ -603,6 +684,20 @@ export function createCanvas(wrap, store) {
 
     if (g.type === 'pan' && !g.moved && !cancelled) store.select(null);
     if (g.type === 'drag' || g.type === 'bg') store.endCoalesce();
+    if (g.type === 'drag' && !g.moved && !cancelled && g.removeOnTap) {
+      store.select(componentSelection(selectedComponentIds(store.selection).filter((cid) => cid !== g.id)));
+    }
+    if (g.type === 'box') {
+      box.setAttribute('display', 'none');
+      if (!cancelled) {
+        if (g.moved) {
+          const hits = componentsIn(boxRect(g.from, toWorld(e.clientX, e.clientY)));
+          store.select(componentSelection([...g.base, ...hits]));
+        } else if (!selectMode) {
+          store.select(null);
+        }
+      }
+    }
     if (g.type === 'bg' && !g.moved && !cancelled) store.select(null);
     if (g.type === 'wire') {
       const target = cancelled ? null : pinAt(e.clientX, e.clientY);
@@ -728,6 +823,14 @@ export function createCanvas(wrap, store) {
     exportSvg,
     placeForNewConnector,
     visibleRect,
+    setSelectMode(on) {
+      selectMode = Boolean(on);
+      svg.classList.toggle('is-selecting', selectMode);
+      updateHint();
+    },
+    get selectMode() {
+      return selectMode;
+    },
     zoomBy(factor) {
       const r = size();
       zoomAt(factor, r.width / 2, r.height / 2);

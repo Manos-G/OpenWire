@@ -3,4 +3,5 @@
 // 0.4 connector sides with typed pin groups, CSI/DSI cables. 0.4.1 group names in the drawing.
 // 0.5 themes (OpenWire, Catppuccin, VS Code), photos in the middle of connectors.
 // 0.5.1 exported SVG files use plain colors again.
-export const VERSION = '0.5.1';
+// 0.6 select several components, DC barrel plugs, schematics, ZIP project files.
+export const VERSION = '0.6.0';

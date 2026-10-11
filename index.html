@@ -44,6 +44,7 @@
             <button type="button" role="menuitem" data-cmd="save">Save <kbd data-keys="Ctrl+S"></kbd></button>
             <button type="button" role="menuitem" data-cmd="save-as">Save as… <kbd data-keys="Ctrl+Shift+S"></kbd></button>
             <hr>
+            <button type="button" role="menuitem" data-cmd="export-json">Export project as JSON text</button>
             <button type="button" role="menuitem" data-cmd="export-svg">Export drawing (SVG)</button>
             <button type="button" role="menuitem" data-cmd="export-cutlist">Download cut list (CSV)</button>
             <button type="button" role="menuitem" data-cmd="export-bom">Download BOM (CSV)</button>
@@ -52,6 +53,9 @@
             <button type="button" role="menuitem" data-cmd="example">Open the example</button>
           </div>
         </div>
+        <button type="button" class="icon-button" data-cmd="select-mode" aria-pressed="false" aria-label="Select several components" data-tip="Select several components (or hold Shift)">
+          <svg viewBox="0 0 20 20" aria-hidden="true"><rect x="2.5" y="2.5" width="9" height="9" rx="1" stroke-dasharray="2.2 1.8"/><path d="m10 10 6.5 2.6-2.8 1.1-1.1 2.8Z"/></svg>
+        </button>
         <button type="button" class="icon-button" data-cmd="undo" aria-label="Undo" data-tip="Undo" data-keys="Ctrl+Z" disabled>
           <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M7.5 5 3.5 9l4 4" /><path d="M4 9h8a4.5 4.5 0 0 1 0 9H9" /></svg>
         </button>
@@ -91,7 +95,7 @@
         <div class="menu-list menu-right" id="theme-menu" role="menu" aria-labelledby="theme-button" hidden></div>
       </div>
 
-      <a class="version" id="app-version" href="https://github.com/Manos-G/OpenWire/commits/main" title="OpenWire version. Open the list of changes.">v0.5.1</a>
+      <a class="version" id="app-version" href="https://github.com/Manos-G/OpenWire/commits/main" title="OpenWire version. Open the list of changes.">v0.6.0</a>
     </header>
 
     <main class="workspace">
@@ -105,11 +109,15 @@
           <button type="button" role="tab" id="tab-checks" data-tab="checks" aria-controls="panel-checks" aria-selected="false" tabindex="-1">
             Checks <span class="badge" id="checks-badge" hidden></span>
           </button>
+          <button type="button" role="tab" id="tab-schematics" data-tab="schematics" aria-controls="panel-schematics" aria-selected="false" tabindex="-1">
+            Schematics <span class="count-badge" id="schematics-count" hidden></span>
+          </button>
         </div>
         <div class="panel" id="panel-properties" role="tabpanel" aria-labelledby="tab-properties" tabindex="-1"></div>
         <div class="panel is-table" id="panel-cutlist" role="tabpanel" aria-labelledby="tab-cutlist" tabindex="-1" hidden></div>
         <div class="panel is-table" id="panel-bom" role="tabpanel" aria-labelledby="tab-bom" tabindex="-1" hidden></div>
         <div class="panel" id="panel-checks" role="tabpanel" aria-labelledby="tab-checks" tabindex="-1" hidden></div>
+        <div class="panel is-table" id="panel-schematics" role="tabpanel" aria-labelledby="tab-schematics" tabindex="-1" hidden></div>
       </aside>
     </main>
   </div>

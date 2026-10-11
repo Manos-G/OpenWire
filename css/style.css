@@ -1491,3 +1491,149 @@ p {
     order: 6;
   }
 }
+
+/* ---------- Selecting several components ---------- */
+
+.ow-box {
+  fill: var(--ow-sel);
+  fill-opacity: 0.12;
+  stroke: var(--ow-sel);
+  stroke-width: 1.5;
+  stroke-dasharray: 5 4;
+  vector-effect: non-scaling-stroke;
+  pointer-events: none;
+}
+
+.canvas-svg.is-selecting {
+  cursor: crosshair;
+}
+
+.icon-button[aria-pressed='true'] {
+  background: var(--primary-bg);
+  border-color: var(--primary-bg);
+  color: var(--primary-fg);
+}
+
+.multi-list {
+  margin: 4px 0 12px;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 3px;
+}
+
+.multi-list li {
+  padding: 5px 9px;
+  border-left: 3px solid var(--marker);
+  background: var(--surface);
+  font-size: 14px;
+}
+
+/* ---------- Schematics ---------- */
+
+.count-badge {
+  display: inline-block;
+  min-width: 20px;
+  padding: 0 6px;
+  border-radius: 10px;
+  background: var(--rule);
+  color: var(--ink);
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 20px;
+  text-align: center;
+}
+
+.sch-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: 12px 16px 24px;
+}
+
+.sch-list {
+  list-style: none;
+  margin: 0 0 12px;
+  padding: 0;
+  display: grid;
+  gap: 10px;
+}
+
+.sch-card {
+  display: grid;
+  grid-template-columns: 84px minmax(0, 1fr);
+  gap: 12px;
+  padding: 10px;
+  border: 1px solid var(--rule);
+  border-radius: 6px;
+  background: var(--surface);
+}
+
+.sch-card.is-missing {
+  border-style: dashed;
+}
+
+.sch-preview {
+  display: grid;
+  place-items: center;
+  width: 84px;
+  height: 100px;
+  padding: 4px;
+  border: 1px solid var(--rule);
+  border-radius: 4px;
+  background: var(--ow-sheet);
+  cursor: pointer;
+  overflow: hidden;
+}
+
+.sch-preview img {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+}
+
+.sch-icon svg {
+  width: 44px;
+  height: 55px;
+}
+
+.sch-body {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+}
+
+.sch-name {
+  font-weight: 600;
+}
+
+.sch-facts {
+  font-size: 13px;
+  color: var(--ink-muted);
+}
+
+.sch-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.sch-drop {
+  padding: 18px 16px;
+  border: 2px dashed var(--rule-strong);
+  border-radius: 6px;
+  color: var(--ink-muted);
+  text-align: center;
+  cursor: pointer;
+}
+
+.sch-drop:hover,
+.sch-drop:focus-visible {
+  border-color: var(--focus);
+  color: var(--ink);
+}
+
+.sch-drop p + p {
+  margin-top: 4px;
+  font-size: 14px;
+}
