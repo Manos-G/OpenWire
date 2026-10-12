@@ -6,7 +6,7 @@ OpenWire is a free, open-source tool to draw wire harnesses. It operates in your
 
 > **NOTE:** This link operates after you publish the site. Refer to [Publish OpenWire on GitHub Pages](#publish-openwire-on-github-pages).
 
-The version number is in the top right corner of the page. This README is for version 0.7.0.
+The version number is in the top right corner of the page. This README is for version 0.8.0.
 
 ## What OpenWire does
 
@@ -15,6 +15,7 @@ The version number is in the top right corner of the page. This README is for ve
 - Set each pin of a connector as an input or an output.
 - Add splitters (lever connectors). Set the number of inputs and the number of outputs for each input.
 - Draw vacuum lines (hoses) with their inner and outer diameter, material and color. Connect them to hose barbs, push-in fittings and vacuum tees.
+- Add mini vacuum pumps and suction cups, with clear tubes that you can see through in the drawing.
 - Draw wires from pin to pin with a mouse, a pen or a finger.
 - Give each wire a color, a stripe, a gauge and a length. The colors use the IEC 60757 codes, for example BK, RD and GN. The drawing shows the name, the gauge and the length of each wire.
 - Change a wire to a USB or DC cable. The drawing shows a plug at each end: USB-A, USB-B, USB-C, Micro-USB, Mini-USB or a DC barrel plug with its diameters.
@@ -161,6 +162,21 @@ A vacuum line is a hose, for example from a vacuum pump to a valve.
 6. Type the **Length**, the part number and the price per meter.
 
 The drawing shows a hose with a hose clamp at each end. A larger outer diameter gives a wider hose. The label shows VAC and the inner diameter, for example "VAC Ø4".
+
+### Mini vacuum pumps and suction cups
+
+For small projects, for example a pick-and-place tool, use the small 12 V vacuum pumps, suction cups and thin clear tubes.
+
+1. Click **Add** > **Mini vacuum pump**. The pump has the power pins +12V and GND on the left side. It has two hose barbs on the right side: Vacuum (the suction port) and Exhaust.
+2. Click **Add** > **Suction cup**. The cup has one hose barb.
+3. Draw a line from the **Vacuum** barb of the pump to the barb of the cup. To connect more cups, add a vacuum tee.
+4. Set **Type** to **Vacuum line (hose)**, **Color** to **Clear (CL)** and **Common size** to a thin size, for example 3 × 5 mm.
+
+A clear tube shows as a tube that you can see through. The thin sizes are 2 × 4, 2.5 × 4, 3 × 5 and 4 × 6 mm.
+
+The pump and the cup show a graphic in the middle. To change the graphic of a connector, select **Graphic in the middle** in the **Properties** tab: None, Mini vacuum pump or Suction cup. A photo replaces the graphic. The BOM shows the type Pump or Suction cup.
+
+### Split a vacuum line
 
 To split a vacuum line, click **Add** > **Vacuum tee**. A vacuum tee has one input and two outputs. Set **Inputs** and **Outputs per input** to make a manifold.
 
@@ -373,6 +389,7 @@ You can open the ZIP file with any ZIP program. You can compare two versions of 
 - A USB or DC cable can have `"usbA": "BARREL"` or `"usbB": "BARREL"`. Then `barrelOuter` and `barrelInner` give the diameters in mm.
 - A vacuum line is a wire with `"kind": "tube"`, `tubeInner` and `tubeOuter` (mm), `tubeMaterial` (`silicone`, `epdm`, `nbr`, `fkm`, `pa`, `pu` or `pvc`), `color` (the color codes, and `CL` for clear) and `pricePerMeter`.
 - A vacuum tee is a splitter with `"style": "manifold"`.
+- A connector can have `"shape": "pump"` or `"shape": "cup"`. Then the drawing shows a pump or a suction cup in its middle.
 - A flat cable is a wire with `"kind": "flat"`, `flatUse` (`CSI` or `DSI`), `flatA` and `flatB` (`15` or `22`) and `price`.
 - The `version` number shows the format version. This version of OpenWire opens version 1.
 

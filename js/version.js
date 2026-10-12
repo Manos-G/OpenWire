@@ -5,4 +5,5 @@
 // 0.5.1 exported SVG files use plain colors again.
 // 0.6 select several components, DC barrel plugs, schematics, ZIP project files.
 // 0.7 vacuum lines, hose barbs, push-in fittings and vacuum tees.
-export const VERSION = '0.7.0';
+// 0.8 mini vacuum pumps, suction cups, clear see-through tubes, thin tube sizes.
+export const VERSION = '0.8.0';

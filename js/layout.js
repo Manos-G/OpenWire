@@ -100,6 +100,9 @@ function sideColumn(groups) {
 
 const PHOTO_W = 150; // Width of a photo in the middle of a connector.
 
+// Size of the graphic of a mini vacuum pump or a suction cup.
+const DECO = { pump: { w: 100, h: 54 }, cup: { w: 78, h: 62 } };
+
 function photoSize(c, project, width) {
   const img = project ? findImage(project, c.image) : null;
   if (!img) return null;
@@ -123,19 +126,22 @@ function layoutConnector(c, project) {
   const B = placeGroups(s.bottom, COL_W);
 
   // A photo goes in the middle, between the names of the left and right pins.
+  // A photo goes in the middle. Without a photo, a pump or a suction cup shows its graphic there.
   const img = project ? findImage(project, c.image) : null;
   const view = img ? pictureView(img, c.photoRotation, c.photoCrop) : null;
-  const leftNames = img && s.left.length ? sideColumn(s.left) : 0;
-  const rightNames = img && s.right.length ? sideColumn(s.right) : 0;
+  const decoSize = img ? null : DECO[c.shape] || null;
+  const inside = Boolean(img || decoSize);
+  const leftNames = inside && s.left.length ? sideColumn(s.left) : 0;
+  const rightNames = inside && s.right.length ? sideColumn(s.right) : 0;
   const width = Math.max(
     s.left.length && s.right.length ? TWO_SIDE_W : BOX_W,
     T.length + 2 * PAD + 16,
     B.length + 2 * PAD + 16,
-    img ? leftNames + rightNames + PHOTO_W + 2 * PHOTO_PAD : 0,
+    inside ? leftNames + rightNames + (img ? PHOTO_W : decoSize.w) + 2 * PHOTO_PAD : 0,
   );
   const twoSided = Boolean(s.left.length && s.right.length);
-  const leftCol = img ? leftNames : twoSided ? width / 2 : width;
-  const rightCol = img ? rightNames : twoSided ? width / 2 : width;
+  const leftCol = inside ? leftNames : twoSided ? width / 2 : width;
+  const rightCol = inside ? rightNames : twoSided ? width / 2 : width;
   const topLabels = s.top.length ? labelSpace(s.top) : 0;
   const bottomLabels = s.bottom.length ? labelSpace(s.bottom) : 0;
   // On the top and bottom sides, the group names go next to the connector graphic.
@@ -157,10 +163,16 @@ function layoutConnector(c, project) {
     }
     photo = { img, width: Math.round(w), height: Math.round(h), x: Math.round(leftCol + PHOTO_PAD + (room - w) / 2), y: 0 };
   }
+  let deco = null;
+  if (decoSize) {
+    const room = width - leftCol - rightCol - 2 * PHOTO_PAD;
+    deco = { shape: c.shape, width: decoSize.w, height: decoSize.h, x: Math.round(leftCol + PHOTO_PAD + (room - decoSize.w) / 2), y: 0 };
+  }
   const pinsHeight = sideLength ? sideLength + 2 * PAD : s.top.length || s.bottom.length ? 8 : ROW_H;
-  const rowsHeight = Math.max(pinsHeight, photo ? photo.height + 2 * PHOTO_PAD : 0);
+  const rowsHeight = Math.max(pinsHeight, photo ? photo.height + 2 * PHOTO_PAD : 0, deco ? deco.height + 2 * PHOTO_PAD : 0);
   const rowsBottom = rowsTop + rowsHeight;
   if (photo) photo.y = Math.round(rowsTop + (rowsHeight - photo.height) / 2);
+  if (deco) deco.y = Math.round(rowsTop + (rowsHeight - deco.height) / 2);
   const bottomStart = rowsBottom;
   const bottomZone = s.bottom.length ? HOUSING + bottomCaption + bottomLabels : 0;
   const height = bottomStart + bottomZone;
@@ -209,6 +221,7 @@ function layoutConnector(c, project) {
     pins,
     photo,
     photoInside: Boolean(photo),
+    deco,
     leftCol,
     rightCol,
     twoSided,

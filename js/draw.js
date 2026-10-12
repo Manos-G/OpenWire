@@ -66,6 +66,21 @@ export const DIAGRAM_CSS = `
 .ow-tube-edge { fill: none; stroke: var(--ow-wire-edge, #1d2833); stroke-linecap: butt; }
 .ow-tube-core { fill: none; stroke-linecap: butt; }
 .ow-tube-bore { fill: none; stroke-linecap: butt; }
+.ow-tube-clear-edge { fill: none; stroke: #6f97a8; stroke-opacity: 0.95; stroke-linecap: butt; }
+.ow-tube-clear-core { fill: none; stroke: #e4f3f8; stroke-opacity: 0.3; stroke-linecap: butt; }
+.ow-tube-clear-wall { fill: none; stroke: #8fb7c6; stroke-opacity: 0.55; stroke-linecap: butt; }
+.ow-tube-glint { fill: none; stroke: #ffffff; stroke-opacity: 0.85; stroke-width: 1.1; stroke-linecap: round; }
+.ow-motor { fill: #cdd2d6; stroke: #59626a; stroke-width: 1; }
+.ow-motor-band { fill: #9aa3ab; }
+.ow-motor-shine { fill: #ffffff; fill-opacity: 0.55; }
+.ow-pump-head { fill: #2b2f33; stroke: #0f1113; stroke-width: 1; }
+.ow-nozzle { fill: #ecebe6; stroke: #7a776c; stroke-width: 0.8; }
+.ow-terminal-red { fill: #d0312d; }
+.ow-terminal-black { fill: #202326; }
+.ow-cup { fill: #2f6fd1; fill-opacity: 0.88; stroke: #183f82; stroke-width: 1; stroke-linejoin: round; }
+.ow-cup-lip { fill: #2a5fb3; stroke: #183f82; stroke-width: 1; }
+.ow-cup-fit { fill: #d4a73a; stroke: #8a6a1c; stroke-width: 0.8; }
+.ow-deco-text { fill: var(--ow-muted, #52606d); font-size: 9.5px; text-anchor: middle; }
 .ow-clamp { fill: #c3c9ce; stroke: #4f575e; stroke-width: 0.8; }
 .ow-manifold-body { fill: var(--ow-split-body, #e3e6e9); stroke: var(--ow-ink, #26323f); stroke-width: 1.25; }
 .ow-channel-edge { fill: none; stroke: #7d8790; stroke-width: 7; stroke-linecap: round; stroke-linejoin: round; }
@@ -354,6 +369,39 @@ function headMarkup(c, L, subtitle) {
   </g>`;
 }
 
+// The graphic of a mini vacuum pump or a suction cup, in the middle of the connector.
+function decoMarkup(c, L) {
+  const d = L.deco;
+  if (!d) return '';
+  const x = d.x;
+  const cy = d.y + d.height / 2 - 4;
+  const caption = `<text class="ow-deco-text" x="${x + d.width / 2}" y="${d.y + d.height - 1}">${d.shape === 'pump' ? 'Mini vacuum pump' : 'Suction cup'}</text>`;
+  if (d.shape === 'pump') {
+    // Motor can on the left, pump head with two nozzles on the right.
+    return `<g class="ow-head-g ow-deco" data-conn-head="${esc(c.id)}">
+      <rect class="ow-terminal-red" x="${x}" y="${cy - 9}" width="5" height="4" rx="1"/>
+      <rect class="ow-terminal-black" x="${x}" y="${cy + 5}" width="5" height="4" rx="1"/>
+      <rect class="ow-motor" x="${x + 4}" y="${cy - 17}" width="54" height="34" rx="6"/>
+      <rect class="ow-motor-band" x="${x + 10}" y="${cy - 17}" width="5" height="34"/>
+      <rect class="ow-motor-shine" x="${x + 18}" y="${cy - 13}" width="34" height="5" rx="2.5"/>
+      <rect class="ow-pump-head" x="${x + 58}" y="${cy - 20}" width="26" height="40" rx="4"/>
+      <rect class="ow-nozzle" x="${x + 84}" y="${cy - 12}" width="14" height="6" rx="1.5"/>
+      <rect class="ow-nozzle" x="${x + 84}" y="${cy + 6}" width="14" height="6" rx="1.5"/>
+      ${caption}
+    </g>`;
+  }
+  // Suction cup: a fitting on the left, bellows, and the lip on the right.
+  const a = x;
+  return `<g class="ow-head-g ow-deco" data-conn-head="${esc(c.id)}">
+    <rect class="ow-cup-fit" x="${a}" y="${cy - 3.5}" width="16" height="7" rx="1"/>
+    <polygon class="ow-cup" points="${a + 15},${cy - 8} ${a + 30},${cy - 12} ${a + 30},${cy + 12} ${a + 15},${cy + 8}"/>
+    <polygon class="ow-cup" points="${a + 29},${cy - 10} ${a + 44},${cy - 16} ${a + 44},${cy + 16} ${a + 29},${cy + 10}"/>
+    <polygon class="ow-cup" points="${a + 43},${cy - 13} ${a + 62},${cy - 25} ${a + 62},${cy + 25} ${a + 43},${cy + 13}"/>
+    <rect class="ow-cup-lip" x="${a + 61}" y="${cy - 27}" width="5" height="54" rx="2"/>
+    ${caption}
+  </g>`;
+}
+
 export function photoMarkup(c, L) {
   const box = L.photo;
   if (!box) return '';
@@ -394,6 +442,7 @@ export function connectorMarkup(c, L, { used, selected }) {
     ${headMarkup(c, L, c.partNumber)}
     ${groups}
     ${empty}
+    ${decoMarkup(c, L)}
     ${photoMarkup(c, L)}
   </g>`;
 }
@@ -615,6 +664,18 @@ export function wireMarkup(w, g, ends, selected) {
     const width = clamp((w.tubeOuter || 7) * 1.1, 5, 13);
     const bore = clamp(width * ((w.tubeInner || 4) / (w.tubeOuter || 7)), 1.2, width - 2);
     const hex = colorInfo(w.color)?.hex || '#202326';
+    if (w.color === 'CL') {
+      // A clear tube: you can see through it. Only the walls and a glint show.
+      return `<g class="ow-wire ow-tube ow-tube-clear" data-wire="${esc(w.id)}">
+        ${selected ? `<path class="ow-sel" d="${g.d}" stroke-width="${r1(width + 10)}"/>` : ''}
+        <path class="ow-tube-clear-edge" d="${g.d}" stroke-width="${r1(width + 1.6)}"/>
+        <path class="ow-tube-clear-core" d="${g.d}" stroke="#e4f3f8" stroke-width="${r1(width)}"/>
+        <path class="ow-tube-clear-wall" d="${g.d}" stroke-width="${r1(bore + 1.2)}"/>
+        <path class="ow-tube-clear-core" d="${g.d}" stroke-width="${r1(bore)}"/>
+        <path class="ow-tube-glint" d="${g.d}" transform="translate(0 ${r1(-width * 0.22)})"/>
+        ${hoseClamp(ends.a, width)}${hoseClamp(ends.b, width)}${hit}
+      </g>`;
+    }
     return `<g class="ow-wire ow-tube" data-wire="${esc(w.id)}">
       ${selected ? `<path class="ow-sel" d="${g.d}" stroke-width="${r1(width + 10)}"/>` : ''}
       <path class="ow-tube-edge" d="${g.d}" stroke-width="${r1(width + 1.8)}"/>

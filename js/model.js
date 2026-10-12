@@ -130,6 +130,12 @@ export const TUBE_MATERIALS = [
 ];
 // Common hose sizes: inner × outer diameter, in mm.
 export const TUBE_SIZES = [
+  // Thin tubes for mini vacuum pumps and suction cups.
+  { inner: 2, outer: 4 },
+  { inner: 2.5, outer: 4 },
+  { inner: 3, outer: 5 },
+  { inner: 4, outer: 6 },
+  // Hoses for engines and larger pumps.
   { inner: 3, outer: 6 },
   { inner: 4, outer: 7 },
   { inner: 4, outer: 8 },
@@ -145,7 +151,17 @@ export const tubeSizeText = (w) => `${mmText(w.tubeInner)} × ${mmText(w.tubeOut
 // Splitters: a lever splitter for wires, or a tee or manifold for vacuum hoses.
 export const isManifold = (c) => c?.kind === 'splitter' && c.style === 'manifold';
 export const componentNoun = (c) => (isManifold(c) ? 'vacuum tee' : isSplitter(c) ? 'splitter' : 'connector');
-export const refPrefix = (c) => (isManifold(c) ? 'T' : isSplitter(c) ? 'S' : 'X');
+// A connector can have a graphic in its middle: a mini vacuum pump or a suction cup.
+export const SHAPES = [
+  { code: '', name: 'None' },
+  { code: 'pump', name: 'Mini vacuum pump' },
+  { code: 'cup', name: 'Suction cup' },
+];
+const SHAPE_PREFIX = { pump: 'P', cup: 'SC' };
+const SHAPE_TYPE = { pump: 'Pump', cup: 'Suction cup' };
+export const shapeName = (code) => SHAPES.find((s) => s.code === code)?.name || '';
+
+export const refPrefix = (c) => (isManifold(c) ? 'T' : isSplitter(c) ? 'S' : SHAPE_PREFIX[c?.shape] || 'X');
 
 // The components in a selection: one connector or splitter, or several ('multi').
 export function selectedComponentIds(selection) {
@@ -297,11 +313,12 @@ export function nextRef(items, prefix) {
 }
 
 // A new connector has no pins. Add pins to its sides in Properties.
-export function makeConnector(project, { x = 0, y = 0 } = {}) {
+export function makeConnector(project, { x = 0, y = 0, shape = '' } = {}) {
   return {
     id: newId('c'),
     kind: 'connector',
-    ref: nextRef(project.connectors, 'X'),
+    shape,
+    ref: nextRef(project.connectors, SHAPE_PREFIX[shape] || 'X'),
     x,
     y,
     partNumber: '',
@@ -315,6 +332,30 @@ export function makeConnector(project, { x = 0, y = 0 } = {}) {
     photoCrop: null,
     sides: { left: [], right: [], top: [], bottom: [] },
   };
+}
+
+// A mini vacuum pump (the small 12 V diaphragm pumps): power pins on the left,
+// a vacuum barb and an exhaust barb on the right.
+export function makePump(project, place) {
+  const c = makeConnector(project, { ...place, shape: 'pump' });
+  c.description = 'Mini vacuum pump, 12 V DC';
+  c.sides.left.push({ id: newId('g'), name: 'Power', type: 'generic', pins: [
+    { n: 1, label: '+12V', role: 'in' },
+    { n: 2, label: 'GND', role: '' },
+  ] });
+  c.sides.right.push({ id: newId('g'), name: '', type: 'barb', pins: [
+    { n: 3, label: 'Vacuum', role: '' },
+    { n: 4, label: 'Exhaust', role: '' },
+  ] });
+  return c;
+}
+
+// A vacuum suction cup with a hose barb.
+export function makeCup(project, place) {
+  const c = makeConnector(project, { ...place, shape: 'cup' });
+  c.description = 'Vacuum suction cup';
+  c.sides.left.push({ id: newId('g'), name: '', type: 'barb', pins: [{ n: 1, label: 'Vacuum', role: '' }] });
+  return c;
 }
 
 // ---------- Pins of a connector ----------
@@ -766,7 +807,7 @@ export function billOfMaterials(project) {
   const connectors = [...project.connectors].sort(byRef);
   for (const c of connectors) {
     const pn = c.partNumber.trim();
-    const type = isManifold(c) ? 'Fitting' : isSplitter(c) ? 'Splitter' : 'Connector';
+    const type = isManifold(c) ? 'Fitting' : isSplitter(c) ? 'Splitter' : SHAPE_TYPE[c.shape] || 'Connector';
     add(
       pn ? `${type}:${pn}` : `${type}:#${c.id}`,
       { type, partNumber: pn, manufacturer: c.manufacturer, description: c.description, unit: 'pcs' },
@@ -1112,6 +1153,7 @@ export function normalizeProject(raw) {
       image: imageOrEmpty(c.image),
       photoRotation: turnRotation(c.photoRotation, 0),
       photoCrop: cleanCrop(c.photoCrop),
+      shape: SHAPES.some((sh) => sh.code === c.shape) ? c.shape : '',
       ...extra,
     };
     connectorIds.set(id, connector);

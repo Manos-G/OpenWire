@@ -9,6 +9,8 @@ import {
   findWire,
   makeConnector,
   makeSplitter,
+  makePump,
+  makeCup,
   cleanCrop,
   componentSelection,
   selectedComponentIds,
@@ -300,6 +302,22 @@ function addConnector() {
   store.select({ type: 'connector', id: created.id });
   showTab('properties');
   toast(`Added ${created.ref}. Add pins to its sides in Properties.`);
+}
+
+// A mini vacuum pump or a suction cup, with its ports and graphic.
+function addPreset(make, hint) {
+  const place = canvas.placeForNewConnector(3);
+  let created = null;
+  store.update(
+    (project) => {
+      created = make(project, place);
+      project.connectors.push(created);
+    },
+    { source: 'app', structural: true },
+  );
+  store.select({ type: 'connector', id: created.id });
+  showTab('properties');
+  toast(hint);
 }
 
 // A lever splitter for wires, or a vacuum tee (1 input, 2 outputs) for hoses.
@@ -656,6 +674,8 @@ const commands = {
   'remove-background': removeBackground,
   'add-splitter': () => addSplitter('lever'),
   'add-tee': () => addSplitter('manifold'),
+  'add-pump': () => addPreset(makePump, 'Added a mini vacuum pump. Connect a clear tube to its Vacuum barb.'),
+  'add-cup': () => addPreset(makeCup, 'Added a suction cup. Connect a clear tube to its barb.'),
   'select-mode': toggleSelectMode,
   'select-all': selectAll,
   'photo-turn': turnPicture,

@@ -5,6 +5,7 @@
 // focus make one undo step. The buttons use data-cmd, so app.js runs them.
 
 import {
+  SHAPES,
   TUBE_COLORS,
   TUBE_MATERIALS,
   TUBE_SIZES,
@@ -352,8 +353,9 @@ export function createInspector(root, store) {
     const currency = p.settings.currency;
     const count = wiresOnConnector(p, c.id).length;
     const pins = pinCount(c);
+    const noun = { pump: 'Pump', cup: 'Suction cup' }[c.shape] || 'Connector';
     return `
-      <h2 class="props-title" data-title="Connector">Connector ${esc(c.ref)}</h2>
+      <h2 class="props-title" data-title="${noun}">${noun} ${esc(c.ref)}</h2>
       <p class="props-sub">${plural(pins, 'pin', 'pins')}, ${count ? plural(count, 'wire', 'wires') : 'no wires yet'}.
         Drag the dark bar to move it.</p>
       ${textField({ field: 'ref', label: 'Name', value: c.ref, maxlength: 20 })}
@@ -363,6 +365,8 @@ export function createInspector(root, store) {
         ${numberField({ field: 'price', label: 'Unit price', value: c.price || '', unit: currency, step: 0.01 })}
       </div>
       ${textField({ field: 'description', label: 'Description', value: c.description })}
+      ${selectField({ field: 'shape', label: 'Graphic in the middle', value: c.shape || '', options: SHAPES })}
+      <p class="field-help">A pump or a suction cup shows its graphic in the drawing. A photo replaces the graphic.</p>
       <h3 class="section-title">Pins</h3>
       <p class="field-help">Each side has groups of pins. Give each group a type, for example XT60 or Molex Micro-Fit. The drawing shows the type where the pins touch the side. The type does not limit the number of pins.</p>
       <div class="pin-lists" data-roles></div>
@@ -708,6 +712,7 @@ export function createInspector(root, store) {
 
   function setConnectorField(c, field, raw) {
     if (['ref', 'partNumber', 'manufacturer', 'description', 'contactPartNumber'].includes(field)) c[field] = raw;
+    else if (field === 'shape') c.shape = SHAPES.some((sh) => sh.code === raw) ? raw : '';
     else if (field === 'price' || field === 'contactPrice') c[field] = money(raw);
   }
 
