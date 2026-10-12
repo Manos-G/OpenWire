@@ -302,14 +302,15 @@ function addConnector() {
   toast(`Added ${created.ref}. Add pins to its sides in Properties.`);
 }
 
-function addSplitter() {
-  const poles = 2;
+// A lever splitter for wires, or a vacuum tee (1 input, 2 outputs) for hoses.
+function addSplitter(style = 'lever') {
+  const poles = style === 'manifold' ? 1 : 2;
   const outputs = 2;
   const place = canvas.placeForNewConnector(poles * outputs);
   let created = null;
   store.update(
     (project) => {
-      created = makeSplitter(project, { ...place, poles, outputs });
+      created = makeSplitter(project, { ...place, poles, outputs, style });
       project.connectors.push(created);
     },
     { source: 'app', structural: true },
@@ -653,7 +654,8 @@ const commands = {
   'remove-connector-photo': removeConnectorPhoto,
   'add-background': chooseBackground,
   'remove-background': removeBackground,
-  'add-splitter': addSplitter,
+  'add-splitter': () => addSplitter('lever'),
+  'add-tee': () => addSplitter('manifold'),
   'select-mode': toggleSelectMode,
   'select-all': selectAll,
   'photo-turn': turnPicture,

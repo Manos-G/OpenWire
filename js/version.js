@@ -4,4 +4,5 @@
 // 0.5 themes (OpenWire, Catppuccin, VS Code), photos in the middle of connectors.
 // 0.5.1 exported SVG files use plain colors again.
 // 0.6 select several components, DC barrel plugs, schematics, ZIP project files.
-export const VERSION = '0.6.0';
+// 0.7 vacuum lines, hose barbs, push-in fittings and vacuum tees.
+export const VERSION = '0.7.0';

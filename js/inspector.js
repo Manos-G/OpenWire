@@ -5,6 +5,13 @@
 // focus make one undo step. The buttons use data-cmd, so app.js runs them.
 
 import {
+  TUBE_COLORS,
+  TUBE_MATERIALS,
+  TUBE_SIZES,
+  isManifold,
+  isTube,
+  totalTubeLength,
+  tubeSizeText,
   BARREL_SIZES,
   CONNECTOR_TYPES,
   barrelSizeText,
@@ -237,15 +244,20 @@ export function createInspector(root, store) {
   function projectOutputs() {
     const p = store.project;
     const wires = p.wires.filter(isCutWire);
-    const usb = p.wires.length - wires.length;
-    const splitters = p.connectors.filter(isSplitter).length;
+    const tubes = p.wires.filter(isTube);
+    const cables = p.wires.length - wires.length - tubes.length;
+    const splitters = p.connectors.filter((c) => isSplitter(c) && !isManifold(c)).length;
+    const tees = p.connectors.filter(isManifold).length;
     const missing = wires.filter((w) => !isPositive(w.length)).length;
     return `
-      <dt>Connectors</dt><dd>${p.connectors.length - splitters}</dd>
+      <dt>Connectors</dt><dd>${p.connectors.length - splitters - tees}</dd>
       ${splitters ? `<dt>Splitters</dt><dd>${splitters}</dd>` : ''}
-      <dt>Wires</dt><dd>${wires.length}</dd>
-      ${usb ? `<dt>Cables</dt><dd>${usb}</dd>` : ''}
-      <dt>Wire to cut</dt><dd>${formatMeters(totalWireLength(p))} m${missing ? ` (${plural(missing, 'wire has', 'wires have')} no length)` : ''}</dd>`;
+      ${tees ? `<dt>Vacuum tees</dt><dd>${tees}</dd>` : ''}
+      ${wires.length || !tubes.length ? `<dt>Wires</dt><dd>${wires.length}</dd>` : ''}
+      ${tubes.length ? `<dt>Vacuum lines</dt><dd>${tubes.length}</dd>` : ''}
+      ${cables ? `<dt>Cables</dt><dd>${cables}</dd>` : ''}
+      ${wires.length || !tubes.length ? `<dt>Wire to cut</dt><dd>${formatMeters(totalWireLength(p))} m${missing ? ` (${plural(missing, 'wire has', 'wires have')} no length)` : ''}</dd>` : ''}
+      ${tubes.length ? `<dt>Hose to cut</dt><dd>${formatMeters(totalTubeLength(p))} m</dd>` : ''}`;
   }
 
   function pinRow(c, pin) {
@@ -408,10 +420,12 @@ export function createInspector(root, store) {
       ).join('');
       return `<p class="pin-group-title">From input ${i + 1}</p><div class="pins">${rows}</div>`;
     }).join('');
+    const noun = isManifold(c) ? 'Vacuum tee' : 'Splitter';
+    const lower = noun.toLowerCase();
     return `
-      <h2 class="props-title" data-title="Splitter">Splitter ${esc(c.ref)}</h2>
-      <p class="props-sub">${count ? `${plural(count, 'wire connects', 'wires connect')} to this splitter.` : 'No wires connect to this splitter yet.'}
-        Each input connects to its outputs inside the splitter.</p>
+      <h2 class="props-title" data-title="${noun}">${noun} ${esc(c.ref)}</h2>
+      <p class="props-sub">${count ? `${plural(count, 'line connects', 'lines connect')} to this ${lower}.` : `No lines connect to this ${lower} yet.`}
+        Each input connects to its outputs inside the ${lower}.</p>
       ${textField({ field: 'ref', label: 'Name', value: c.ref, maxlength: 20 })}
       <div class="field-row">
         ${numberField({ field: 'poles', label: 'Inputs', value: c.poles, min: 1, max: MAX_POLES, step: 1, onChange: true })}
@@ -514,7 +528,46 @@ export function createInspector(root, store) {
       </div>`;
   }
 
+  function renderTube(w) {
+    const currency = store.project.settings.currency;
+    const current = TUBE_SIZES.find((t) => t.inner === w.tubeInner && t.outer === w.tubeOuter);
+    const sizes = [
+      ...TUBE_SIZES.map((t) => ({ code: `${t.inner}x${t.outer}`, name: tubeSizeText({ tubeInner: t.inner, tubeOuter: t.outer }) })),
+      { code: 'other', name: 'Other size' },
+    ];
+    const colors = TUBE_COLORS.map((code) => ({ code, name: `${capitalize(colorInfo(code)?.name || code)} (${code})` }));
+    return `
+      <h2 class="props-title" data-title="Vacuum line">Vacuum line ${esc(w.ref)}</h2>
+      <p class="props-sub">From ${esc(endText(w.from))} to ${esc(endText(w.to))}</p>
+      <div class="field-row">
+        ${textField({ field: 'ref', label: 'Name', value: w.ref, maxlength: 20 })}
+        ${selectField({ field: 'kind', label: 'Type', value: 'tube', options: WIRE_KINDS })}
+      </div>
+      ${textField({ field: 'signal', label: 'Use', value: w.signal, placeholder: 'For example brake booster', maxlength: 60 })}
+      <div class="field-row">
+        ${selectField({ field: 'tubeMaterial', label: 'Material', value: w.tubeMaterial, options: TUBE_MATERIALS })}
+        ${selectField({ field: 'color', label: 'Color', value: w.color, options: colors })}
+      </div>
+      ${selectField({ field: 'tubeSize', label: 'Common size (inner × outer)', value: current ? `${current.inner}x${current.outer}` : 'other', options: sizes })}
+      <div class="field-row">
+        ${numberField({ field: 'tubeInner', label: 'Inner diameter', value: w.tubeInner, unit: 'mm', step: 0.1, min: 0 })}
+        ${numberField({ field: 'tubeOuter', label: 'Outer diameter', value: w.tubeOuter, unit: 'mm', step: 0.1, min: 0 })}
+      </div>
+      ${numberField({ field: 'length', label: 'Length', value: w.length ?? '', unit: 'mm', step: 1, placeholder: 'Required' })}
+      <dl class="outputs" data-outputs></dl>
+      <div class="field-row">
+        ${textField({ field: 'partNumber', label: 'Hose part number', value: w.partNumber })}
+        ${numberField({ field: 'pricePerMeter', label: 'Price per meter', value: w.pricePerMeter || '', unit: currency, step: 0.01 })}
+      </div>
+      <p class="field-help">The cut list shows the hose with its length. A hose gets no extra length for stripping. Use a Hose barb or Push-in fitting group on the parts, and a vacuum tee to split a line.</p>
+      <div class="props-actions">
+        <button type="button" class="button" data-cmd="swap-ends">Swap ends</button>
+        <button type="button" class="button danger" data-cmd="delete">Delete line</button>
+      </div>`;
+  }
+
   function renderWire(w) {
+    if (isTube(w)) return renderTube(w);
     if (isUsb(w)) return renderUsb(w);
     if (isFlat(w)) return renderFlat(w);
     const currency = store.project.settings.currency;
@@ -547,6 +600,10 @@ export function createInspector(root, store) {
   }
 
   function wireOutputs(w) {
+    if (isTube(w)) {
+      const cut = cutLength(store.project, w);
+      return `<dt>Cut length</dt><dd>${cut === null ? 'Enter the length' : `${formatLength(cut)} mm`}</dd>`;
+    }
     if (!isCutWire(w)) return '';
     const p = store.project;
     const cut = cutLength(p, w);
@@ -557,7 +614,7 @@ export function createInspector(root, store) {
 
   // ---------- Rendering ----------
 
-  const PANEL_FIELDS = new Set(['kind', 'usbA', 'usbB', 'barrelSize']);
+  const PANEL_FIELDS = new Set(['kind', 'usbA', 'usbB', 'barrelSize', 'tubeSize']);
 
   function selectedItem() {
     const sel = store.selection;
@@ -659,11 +716,23 @@ export function createInspector(root, store) {
       const kind = WIRE_KINDS.some((k) => k.code === raw) ? raw : 'wire';
       // A wire part number is not correct for a USB cable, and the opposite.
       if (kind !== w.kind) w.partNumber = '';
+      if (kind === 'tube') w.stripe = '';
       w.kind = kind;
     } else if (['ref', 'signal', 'gauge', 'partNumber', 'color', 'stripe', 'usbA', 'usbB', 'flatUse', 'flatA', 'flatB'].includes(field)) {
       w[field] = raw;
     } else if (field === 'price') {
       w.price = money(raw);
+    } else if (field === 'tubeMaterial') {
+      w.tubeMaterial = TUBE_MATERIALS.some((m) => m.code === raw) ? raw : 'silicone';
+    } else if (field === 'tubeSize') {
+      const [inner, outer] = raw.split('x').map(Number);
+      if (inner > 0 && outer > 0) {
+        w.tubeInner = inner;
+        w.tubeOuter = outer;
+      }
+    } else if (field === 'tubeInner' || field === 'tubeOuter') {
+      const n = numberOr(raw, null);
+      if (n !== null && n >= 0) w[field] = n;
     } else if (field === 'barrelSize') {
       const [outer, inner] = raw.split('x').map(Number);
       if (outer > 0 && inner > 0) {

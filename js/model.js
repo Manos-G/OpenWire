@@ -97,6 +97,8 @@ export const CONNECTOR_TYPES = [
   { code: 'terminal', name: 'Screw terminal' },
   { code: 'lever', name: 'Lever terminal (WAGO)' },
   { code: 'ring', name: 'Ring or spade terminal' },
+  { code: 'barb', name: 'Hose barb (vacuum)' },
+  { code: 'pushin', name: 'Push-in fitting (vacuum)' },
 ];
 
 export const connectorTypeName = (code) => CONNECTOR_TYPES.find((t) => t.code === code)?.name || code;
@@ -104,14 +106,46 @@ export const connectorTypeName = (code) => CONNECTOR_TYPES.find((t) => t.code ==
 export const isSplitter = (c) => c?.kind === 'splitter';
 export const isUsb = (w) => w?.kind === 'usb';
 export const isFlat = (w) => w?.kind === 'flat';
-// Wires that you cut from a reel. Other kinds are complete cables that you buy.
+export const isTube = (w) => w?.kind === 'tube';
+// Electrical wires that you cut from a reel.
 export const isCutWire = (w) => !w?.kind || w.kind === 'wire';
+// Everything that you cut from a reel or a roll: wires and vacuum hoses.
+export const isCutItem = (w) => isCutWire(w) || isTube(w);
 export const WIRE_KINDS = [
   { code: 'wire', name: 'Wire' },
+  { code: 'tube', name: 'Vacuum line (hose)' },
   { code: 'usb', name: 'USB / DC cable' },
   { code: 'flat', name: 'CSI/DSI flat cable' },
 ];
-export const componentNoun = (c) => (isSplitter(c) ? 'splitter' : 'connector');
+
+// Vacuum hoses.
+export const TUBE_MATERIALS = [
+  { code: 'silicone', name: 'Silicone' },
+  { code: 'epdm', name: 'EPDM rubber' },
+  { code: 'nbr', name: 'Nitrile rubber (NBR)' },
+  { code: 'fkm', name: 'Fluoroelastomer (FKM)' },
+  { code: 'pa', name: 'Nylon (PA)' },
+  { code: 'pu', name: 'Polyurethane (PU)' },
+  { code: 'pvc', name: 'PVC' },
+];
+// Common hose sizes: inner × outer diameter, in mm.
+export const TUBE_SIZES = [
+  { inner: 3, outer: 6 },
+  { inner: 4, outer: 7 },
+  { inner: 4, outer: 8 },
+  { inner: 5, outer: 9 },
+  { inner: 6, outer: 9 },
+  { inner: 6, outer: 10 },
+  { inner: 8, outer: 12 },
+  { inner: 10, outer: 14 },
+];
+export const tubeMaterialName = (code) => TUBE_MATERIALS.find((m) => m.code === code)?.name || code || '';
+export const tubeSizeText = (w) => `${mmText(w.tubeInner)} × ${mmText(w.tubeOuter)} mm`;
+
+// Splitters: a lever splitter for wires, or a tee or manifold for vacuum hoses.
+export const isManifold = (c) => c?.kind === 'splitter' && c.style === 'manifold';
+export const componentNoun = (c) => (isManifold(c) ? 'vacuum tee' : isSplitter(c) ? 'splitter' : 'connector');
+export const refPrefix = (c) => (isManifold(c) ? 'T' : isSplitter(c) ? 'S' : 'X');
 
 // The components in a selection: one connector or splitter, or several ('multi').
 export function selectedComponentIds(selection) {
@@ -149,7 +183,11 @@ export const GAUGES = [
   '26 AWG', '24 AWG', '22 AWG', '20 AWG', '18 AWG', '16 AWG', '14 AWG', '12 AWG', '10 AWG',
 ];
 
-const COLOR_BY_CODE = new Map(WIRE_COLORS.map((c) => [c.code, c]));
+// Hoses can also be clear. Wires cannot.
+export const CLEAR = { code: 'CL', name: 'clear', hex: '#cfe3ea' };
+export const TUBE_COLORS = ['BK', 'BU', 'RD', 'YE', 'GN', 'OG', 'GY', 'WH', 'CL'];
+
+const COLOR_BY_CODE = new Map([...WIRE_COLORS, CLEAR].map((c) => [c.code, c]));
 
 export function colorInfo(code) {
   return COLOR_BY_CODE.get(code) || null;
@@ -404,20 +442,26 @@ function splitterPinNumber(poles, outputs, info) {
   return poles + info.pole * outputs + info.index + 1;
 }
 
-export function makeSplitter(project, { x = 0, y = 0, poles = 2, outputs = 2 } = {}) {
+export function makeSplitter(project, { x = 0, y = 0, poles = 2, outputs = 2, style = 'lever' } = {}) {
   const P = clampInt(poles, 1, MAX_POLES);
   const M = clampInt(outputs, 1, MAX_OUTPUTS);
+  const manifold = style === 'manifold';
   return {
     id: newId('c'),
     kind: 'splitter',
-    ref: nextRef(project.connectors, 'S'),
+    style: manifold ? 'manifold' : 'lever',
+    ref: nextRef(project.connectors, manifold ? 'T' : 'S'),
     x,
     y,
     poles: P,
     outputs: M,
     partNumber: '',
     manufacturer: '',
-    description: `Lever splitter, ${P} in, ${P * M} out`,
+    description: manifold
+      ? M === 2 && P === 1
+        ? 'Vacuum tee'
+        : `Vacuum manifold, ${P} in, ${P * M} out`
+      : `Lever splitter, ${P} in, ${P * M} out`,
     price: 0,
     contactPartNumber: '',
     contactPrice: 0,
@@ -494,6 +538,9 @@ export function makeWire(project, from, to, template = null) {
     flatUse: template?.flatUse || 'CSI',
     flatA: template?.flatA || '15',
     flatB: template?.flatB || '15',
+    tubeInner: template ? numberOr(template.tubeInner, 4) : 4,
+    tubeOuter: template ? numberOr(template.tubeOuter, 7) : 7,
+    tubeMaterial: template?.tubeMaterial || 'silicone',
     barrelOuter: template ? numberOr(template.barrelOuter, 5.5) : 5.5,
     barrelInner: template ? numberOr(template.barrelInner, 2.1) : 2.1,
     price: template ? numberOr(template.price, 0) : 0,
@@ -546,7 +593,7 @@ export function duplicateConnector(project, connectorId) {
   const copy = {
     ...structuredClone(source),
     id: newId('c'),
-    ref: nextRef(project.connectors, isSplitter(source) ? 'S' : 'X'),
+    ref: nextRef(project.connectors, refPrefix(source)),
     x: source.x + 40,
     y: source.y + 40,
   };
@@ -644,20 +691,22 @@ export function backgroundRect(project) {
 
 // ---------- Calculations ----------
 
+// A wire gets the extra length for stripping and crimping. A hose does not.
 export function cutLength(project, wire) {
-  if (!isCutWire(wire) || !isPositive(wire.length)) return null;
+  if (!isCutItem(wire) || !isPositive(wire.length)) return null;
+  if (isTube(wire)) return wire.length;
   return wire.length + Math.max(0, numberOr(project.settings.cutMargin, 0));
 }
 
 export function cutList(project) {
-  return cutWires(project).sort(byRef).map((w) => ({
+  return project.wires.filter(isCutItem).sort(byRef).map((w) => ({
     id: w.id,
     ref: w.ref,
     from: endLabel(project, w.from),
     to: endLabel(project, w.to),
     signal: w.signal,
-    color: colorCode(w.color, w.stripe),
-    gauge: w.gauge,
+    color: isTube(w) ? w.color : colorCode(w.color, w.stripe),
+    gauge: isTube(w) ? `Hose ${tubeSizeText(w)}` : w.gauge,
     length: isPositive(w.length) ? w.length : null,
     cutLength: cutLength(project, w),
   }));
@@ -668,8 +717,13 @@ export function cutWires(project) {
   return project.wires.filter(isCutWire);
 }
 
+export function cutTubes(project) {
+  return project.wires.filter(isTube);
+}
+
+// Cables that you buy complete: USB, DC and flat cables.
 export function boughtCables(project) {
-  return project.wires.filter((w) => !isCutWire(w));
+  return project.wires.filter((w) => !isCutItem(w));
 }
 
 // Short text for the label of a wire in the drawing: the gauge, or the cable type.
@@ -679,6 +733,7 @@ export function wireKindText(w) {
     return barrels === 2 ? 'DC' : barrels ? 'USB/DC' : 'USB';
   }
   if (isFlat(w)) return w.flatUse || 'CSI';
+  if (isTube(w)) return `VAC Ø${mmText(w.tubeInner)}`;
   return w.gauge || '';
 }
 
@@ -687,7 +742,11 @@ export function flatEndName(code) {
 }
 
 export function totalWireLength(project) {
-  return project.wires.reduce((sum, w) => sum + (cutLength(project, w) || 0), 0);
+  return cutWires(project).reduce((sum, w) => sum + (cutLength(project, w) || 0), 0);
+}
+
+export function totalTubeLength(project) {
+  return cutTubes(project).reduce((sum, w) => sum + (cutLength(project, w) || 0), 0);
 }
 
 // Groups parts by part number. Parts with no part number get one line each.
@@ -707,7 +766,7 @@ export function billOfMaterials(project) {
   const connectors = [...project.connectors].sort(byRef);
   for (const c of connectors) {
     const pn = c.partNumber.trim();
-    const type = isSplitter(c) ? 'Splitter' : 'Connector';
+    const type = isManifold(c) ? 'Fitting' : isSplitter(c) ? 'Splitter' : 'Connector';
     add(
       pn ? `${type}:${pn}` : `${type}:#${c.id}`,
       { type, partNumber: pn, manufacturer: c.manufacturer, description: c.description, unit: 'pcs' },
@@ -741,6 +800,25 @@ export function billOfMaterials(project) {
         partNumber: pn,
         manufacturer: '',
         description: `${w.gauge || 'Wire'}, ${colorName(w.color, w.stripe)}`,
+        unit: 'm',
+      },
+      meters,
+      numberOr(w.pricePerMeter, 0),
+      w.ref,
+    );
+  }
+
+  for (const w of cutTubes(project).sort(byRef)) {
+    const pn = w.partNumber.trim();
+    const meters = (cutLength(project, w) || 0) / 1000;
+    const material = tubeMaterialName(w.tubeMaterial);
+    add(
+      pn ? `hose:${pn}` : `hose:${w.tubeMaterial}|${w.tubeInner}|${w.tubeOuter}|${w.color}`,
+      {
+        type: 'Hose',
+        partNumber: pn,
+        manufacturer: '',
+        description: `Vacuum hose, ${material}, ${tubeSizeText(w)}, ${colorName(w.color, '')}`,
         unit: 'm',
       },
       meters,
@@ -822,7 +900,13 @@ export function runChecks(project) {
 
   for (const w of [...project.wires].sort(byRef)) {
     const target = { type: 'wire', id: w.id };
-    if (!isCutWire(w)) {
+    if (isTube(w)) {
+      if (!isPositive(w.length)) add('error', `Vacuum line ${w.ref} has no length.`, target);
+      if (!(w.tubeInner > 0)) add('warning', `Vacuum line ${w.ref} has no inner diameter.`, target);
+      if (w.tubeOuter > 0 && w.tubeInner >= w.tubeOuter) {
+        add('warning', `The inner diameter of ${w.ref} is not smaller than its outer diameter.`, target);
+      }
+    } else if (!isCutWire(w)) {
       if (!isPositive(w.length)) add('info', `Cable ${w.ref} has no length.`, target);
     } else {
       if (!isPositive(w.length)) add('error', `${w.ref} has no length.`, target);
@@ -971,7 +1055,7 @@ export function normalizeProject(raw) {
         label: str(arr(c.pins)[i]?.label),
         role: i < P ? 'in' : 'out',
       }));
-      extra = { poles: P, outputs: M, pins };
+      extra = { poles: P, outputs: M, pins, style: c.style === 'manifold' ? 'manifold' : 'lever' };
     } else if (c.sides && typeof c.sides === 'object') {
       const used = new Set();
       let count = 0;
@@ -1072,6 +1156,9 @@ export function normalizeProject(raw) {
       flatUse: FLAT_USES.some((t) => t.code === w.flatUse) ? w.flatUse : 'CSI',
       flatA: FLAT_ENDS.some((t) => t.code === w.flatA) ? w.flatA : '15',
       flatB: FLAT_ENDS.some((t) => t.code === w.flatB) ? w.flatB : '15',
+      tubeInner: Math.min(100, Math.max(0, numberOr(w.tubeInner, 4))),
+      tubeOuter: Math.min(120, Math.max(0, numberOr(w.tubeOuter, 7))),
+      tubeMaterial: TUBE_MATERIALS.some((m) => m.code === w.tubeMaterial) ? w.tubeMaterial : 'silicone',
       barrelOuter: Math.min(30, Math.max(0.5, numberOr(w.barrelOuter, 5.5))),
       barrelInner: Math.min(20, Math.max(0.1, numberOr(w.barrelInner, 2.1))),
       price: numberOr(w.price, 0),

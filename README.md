@@ -6,7 +6,7 @@ OpenWire is a free, open-source tool to draw wire harnesses. It operates in your
 
 > **NOTE:** This link operates after you publish the site. Refer to [Publish OpenWire on GitHub Pages](#publish-openwire-on-github-pages).
 
-The version number is in the top right corner of the page. This README is for version 0.6.0.
+The version number is in the top right corner of the page. This README is for version 0.7.0.
 
 ## What OpenWire does
 
@@ -14,6 +14,7 @@ The version number is in the top right corner of the page. This README is for ve
 - Put pins on the four sides of a connector, in groups. Give each group a type, for example XT60, Molex Micro-Fit or JST XH. The drawing shows the connector graphic where the pins touch the side.
 - Set each pin of a connector as an input or an output.
 - Add splitters (lever connectors). Set the number of inputs and the number of outputs for each input.
+- Draw vacuum lines (hoses) with their inner and outer diameter, material and color. Connect them to hose barbs, push-in fittings and vacuum tees.
 - Draw wires from pin to pin with a mouse, a pen or a finger.
 - Give each wire a color, a stripe, a gauge and a length. The colors use the IEC 60757 codes, for example BK, RD and GN. The drawing shows the name, the gauge and the length of each wire.
 - Change a wire to a USB or DC cable. The drawing shows a plug at each end: USB-A, USB-B, USB-C, Micro-USB, Mini-USB or a DC barrel plug with its diameters.
@@ -101,7 +102,7 @@ Each pin has a number. The number does not change when you add or delete other p
 
 If a pin has wires, OpenWire asks before it deletes the pin and its wires.
 
-These types are available: Generic (no graphic), XT30, XT60, XT90, EC5, Deans, Anderson Powerpole, Molex Micro-Fit 3.0, Molex Mini-Fit Jr., Molex KK 254, Molex PicoBlade, JST XH, JST PH, JST SM, Dupont 2.54 mm, Deutsch DT, Superseal 1.5, M12 circular, RJ45, DC barrel jack, screw terminal, lever terminal and ring or spade terminal.
+These types are available: Generic (no graphic), XT30, XT60, XT90, EC5, Deans, Anderson Powerpole, Molex Micro-Fit 3.0, Molex Mini-Fit Jr., Molex KK 254, Molex PicoBlade, JST XH, JST PH, JST SM, Dupont 2.54 mm, Deutsch DT, Superseal 1.5, M12 circular, RJ45, DC barrel jack, screw terminal, lever terminal, ring or spade terminal, hose barb (vacuum) and push-in fitting (vacuum).
 
 ### Set inputs and outputs
 
@@ -147,6 +148,25 @@ If an end has a DC barrel plug, the **DC barrel plug** fields show:
 The label of the cable shows USB, DC or USB/DC. The BOM shows the plugs and the barrel size, for example "Cable, USB-A to DC barrel 5.5 × 2.1 mm".
 
 These cables are not in the cut list, because you do not cut them from a reel. The BOM shows them as cables. The next wire that you draw gets the same type as the last wire.
+
+### Add a vacuum line
+
+A vacuum line is a hose, for example from a vacuum pump to a valve.
+
+1. Give the parts a port. Add a pin group with the type **Hose barb (vacuum)** or **Push-in fitting (vacuum)**. Refer to [Add pins](#add-pins).
+2. Draw a line between the two ports, as for a wire.
+3. In the **Properties** tab, set **Type** to **Vacuum line (hose)**.
+4. Select the **Material** and the **Color**. The colors include clear.
+5. Select a **Common size**, for example 4 × 7 mm. Or type the **Inner diameter** and the **Outer diameter**.
+6. Type the **Length**, the part number and the price per meter.
+
+The drawing shows a hose with a hose clamp at each end. A larger outer diameter gives a wider hose. The label shows VAC and the inner diameter, for example "VAC Ø4".
+
+To split a vacuum line, click **Add** > **Vacuum tee**. A vacuum tee has one input and two outputs. Set **Inputs** and **Outputs per input** to make a manifold.
+
+The cut list shows each vacuum line. A hose gets no extra length for stripping, so the cut length is the length. The BOM shows the hose in meters, for example "Vacuum hose, Silicone, 4 × 7 mm, black". The BOM shows a vacuum tee as a fitting.
+
+The **Checks** tab shows an error when a vacuum line has no length. It shows a warning when the inner diameter is not smaller than the outer diameter.
 
 ### Add a CSI or DSI flat cable
 
@@ -351,6 +371,8 @@ You can open the ZIP file with any ZIP program. You can compare two versions of 
 - A USB cable is a wire with `"kind": "usb"`, `usbA`, `usbB` and `price`.
 - `schematics` is the list of schematics: `id`, `file`, `name` and `note`. `files` gives the `name`, `type`, `size` and the `path` in the ZIP file of each file. In a `.openwire.json` file, each file also has its contents as a data URL (`data`).
 - A USB or DC cable can have `"usbA": "BARREL"` or `"usbB": "BARREL"`. Then `barrelOuter` and `barrelInner` give the diameters in mm.
+- A vacuum line is a wire with `"kind": "tube"`, `tubeInner` and `tubeOuter` (mm), `tubeMaterial` (`silicone`, `epdm`, `nbr`, `fkm`, `pa`, `pu` or `pvc`), `color` (the color codes, and `CL` for clear) and `pricePerMeter`.
+- A vacuum tee is a splitter with `"style": "manifold"`.
 - A flat cable is a wire with `"kind": "flat"`, `flatUse` (`CSI` or `DSI`), `flatA` and `flatB` (`15` or `22`) and `price`.
 - The `version` number shows the format version. This version of OpenWire opens version 1.
 

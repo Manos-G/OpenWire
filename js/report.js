@@ -29,7 +29,7 @@ export function formatMoney(value, currency) {
 export function cutListTable(project) {
   const rows = cutList(project);
   return {
-    headers: ['Wire', 'From', 'To', 'Signal', 'Color', 'Gauge', 'Length (mm)', 'Cut length (mm)'],
+    headers: ['Line', 'From', 'To', 'Signal', 'Color', 'Gauge or size', 'Length (mm)', 'Cut length (mm)'],
     rows: rows.map((r) => [
       r.ref,
       r.from,

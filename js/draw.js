@@ -1,7 +1,7 @@
 // SVG markup for components, wires and cables. No DOM access.
 // canvas.js puts this markup in the drawing. The SVG export uses the same markup.
 
-import { SPLITTER_COLORS, colorInfo, isFlat, isPositive, isUsb, wireKindText } from './model.js';
+import { SPLITTER_COLORS, colorInfo, isFlat, isManifold, isPositive, isTube, isUsb, wireKindText } from './model.js';
 import { CAPTION_H, COL_W, HEAD_H, HOUSING, LABEL_ZONE, ROW_H } from './layout.js';
 import { escapeHtml as esc, formatLength } from './report.js';
 import { pictureSvg } from './images.js';
@@ -59,6 +59,18 @@ export const DIAGRAM_CSS = `
 .ow-usb-shine { fill: none; stroke: #6b747d; stroke-width: 1; stroke-linecap: round; }
 .ow-plug-shell { fill: #c9ced3; stroke: #5d656d; stroke-width: 0.8; }
 .ow-plug-boot { fill: #2b3137; stroke: #111518; stroke-width: 0.8; }
+.ow-barb { fill: #d4a73a; stroke: #8a6a1c; stroke-width: 0.7; stroke-linejoin: round; }
+.ow-port-boss { fill: #4a5259; stroke: #22272b; stroke-width: 1; }
+.ow-collar { fill: #1f5fbf; stroke: #0f2f60; stroke-width: 0.8; }
+.ow-collar-line { stroke: #8ab4ff; stroke-width: 0.9; }
+.ow-tube-edge { fill: none; stroke: var(--ow-wire-edge, #1d2833); stroke-linecap: butt; }
+.ow-tube-core { fill: none; stroke-linecap: butt; }
+.ow-tube-bore { fill: none; stroke-linecap: butt; }
+.ow-clamp { fill: #c3c9ce; stroke: #4f575e; stroke-width: 0.8; }
+.ow-manifold-body { fill: var(--ow-split-body, #e3e6e9); stroke: var(--ow-ink, #26323f); stroke-width: 1.25; }
+.ow-channel-edge { fill: none; stroke: #7d8790; stroke-width: 7; stroke-linecap: round; stroke-linejoin: round; }
+.ow-channel { fill: none; stroke: #f4f7f9; stroke-width: 4.2; stroke-linecap: round; stroke-linejoin: round; }
+.ow-port-label { fill: var(--ow-text, #1d2833); font-size: 11px; }
 .ow-barrel-ring { stroke: #5d656d; stroke-width: 0.8; }
 .ow-plug-text { fill: #ffffff; font-size: 8.5px; font-weight: 600; text-anchor: middle; }
 .ow-flat-edge { fill: none; stroke: #8c8676; stroke-linecap: butt; }
@@ -104,6 +116,8 @@ const LOOKS = {
   terminal: { style: 'screw', fill: '#2e8b3e', stroke: '#185526' },
   lever: { style: 'lever', fill: '#cfd4d8', stroke: '#6d757d' },
   ring: { style: 'ring' },
+  barb: { style: 'barb' },
+  pushin: { style: 'pushin' },
 };
 
 // Maps a point on a side to the component. `v` is the distance from the edge
@@ -207,6 +221,16 @@ function housing(item, W, H, pitch) {
       parts.push(`<rect ${paint(look.fill, look.stroke)} ${rectAttrs(P, 1, D - 1, u0 + 1, u1 - 1)} rx="2"/>`);
       for (const at of ats) parts.push(`<rect class="ow-term-lever" ${rectAttrs(P, 3, D - 3, at - pitch / 2 + 3, at + pitch / 2 - 3)} rx="2"/>`);
       break;
+    case 'barb':
+      // The port block of the part, with a brass hose barb for each pin.
+      parts.push(`<rect class="ow-port-boss" ${rectAttrs(P, 0.5, D - 4, u0 + 2, u1 - 2)} rx="2"/>`);
+      for (const at of ats) parts.push(barb(P, at));
+      break;
+    case 'pushin':
+      // A push-in fitting: the body and a blue release collar for each pin.
+      parts.push(`<rect class="ow-port-boss" ${rectAttrs(P, 0.5, D - 4, u0 + 2, u1 - 2)} rx="2"/>`);
+      for (const at of ats) parts.push(collar(P, at));
+      break;
     case 'ring':
       for (const at of ats) {
         parts.push(`<rect class="ow-ring-barrel" ${rectAttrs(P, 0.5, 9, at - 2.6, at + 2.6)} rx="1"/>`);
@@ -219,6 +243,32 @@ function housing(item, W, H, pitch) {
   }
   if (look.contact) for (const at of ats) parts.push(contact(P, look.contact, at, look.small));
   return parts.join('');
+}
+
+// A hose barb. It goes out from the edge (negative `v`). The tip is narrow,
+// and each rib gets wider toward the part, like a real barb.
+function barb(P, at) {
+  const stem = `<rect class="ow-barb" ${rectAttrs(P, -13, 3, at - 2.3, at + 2.3)}/>`;
+  const ribs = [-13, -8]
+    .map(
+      (tip) =>
+        `<polygon class="ow-barb" points="${polygon(P, [
+          [tip, at - 2.3],
+          [tip + 4.5, at - 3.9],
+          [tip + 4.5, at + 3.9],
+          [tip, at + 2.3],
+        ])}"/>`,
+    )
+    .join('');
+  return stem + ribs;
+}
+
+// The release collar of a push-in fitting.
+function collar(P, at) {
+  const [x1, y1] = P(-3, at - 3.2);
+  const [x2, y2] = P(-3, at + 3.2);
+  return `<rect class="ow-collar" ${rectAttrs(P, -6, 2, at - 4.4, at + 4.4)} rx="1.4"/>
+    <line class="ow-collar-line" x1="${r1(x1)}" y1="${r1(y1)}" x2="${r1(x2)}" y2="${r1(y2)}"/>`;
 }
 
 // ---------- Connectors ----------
@@ -350,7 +400,60 @@ export function connectorMarkup(c, L, { used, selected }) {
 
 // A splitter looks like a lever splitter: a grey body, one colored lever for
 // each input on the left, and the levers of its outputs on the right.
-export function splitterMarkup(c, L, { used, selected }) {
+// A vacuum tee or manifold: a plastic block with a channel inside. Each input
+// connects through the channel to its outputs. Each port has a hose barb.
+function manifoldMarkup(c, L, { used, selected }) {
+  const id = esc(c.id);
+  const W = L.width;
+  const M = c.outputs;
+  const left = (v, u) => [v, u];
+  const right = (v, u) => [W - v, u];
+  const anchor = (pin, side) => {
+    const isUsed = used.has(`${c.id}:${pin}`);
+    return `<circle class="ow-anchor${isUsed ? ' is-used' : ''}" cx="${side === 'right' ? W : 0}" cy="0" r="${isUsed ? 3.5 : 3}"/>`;
+  };
+  const groups = [];
+  for (let p = 0; p < c.poles; p += 1) {
+    const top = HEAD_H + p * M * ROW_H;
+    const inPin = p + 1;
+    const inMid = (M * ROW_H) / 2;
+    const channel = Array.from({ length: M }, (_, k) => `M 4 ${inMid} H ${W / 2} V ${(k + 0.5) * ROW_H} H ${W - 4}`).join(' ');
+    const outs = Array.from({ length: M }, (_, k) => {
+      const pin = c.poles + p * M + k + 1;
+      const label = c.pins[pin - 1]?.label || `${p + 1}.${k + 1}`;
+      return `<g class="ow-pinrow" data-conn="${id}" data-pin="${pin}" transform="translate(0 ${top + k * ROW_H})">
+        <rect class="ow-row-bg" x="${W / 2}" y="0" width="${W / 2}" height="${ROW_H}"/>
+        ${barb(right, ROW_H / 2)}
+        <text class="ow-port-label" x="${W - 10}" y="${ROW_H / 2 - 6}" text-anchor="end" dominant-baseline="central">${esc(truncate(label, 10))}</text>
+        <g transform="translate(0 ${ROW_H / 2})">${anchor(pin, 'right')}</g>
+        <rect class="ow-hit ow-pin-hit" x="${W / 2}" y="0" width="${W / 2 + 16}" height="${ROW_H}"/>
+      </g>`;
+    }).join('');
+    groups.push(`<g class="ow-pole">
+      ${p > 0 ? `<line class="ow-split-sep" x1="0" y1="${top}" x2="${W}" y2="${top}"/>` : ''}
+      <g transform="translate(0 ${top})"><path class="ow-channel-edge" d="${channel}"/><path class="ow-channel" d="${channel}"/></g>
+      <g class="ow-pinrow" data-conn="${id}" data-pin="${inPin}" transform="translate(0 ${top})">
+        <rect class="ow-row-bg" x="0" y="0" width="${W / 2}" height="${M * ROW_H}"/>
+        ${barb(left, inMid)}
+        <text class="ow-port-label" x="10" y="${inMid - 6}" dominant-baseline="central">${esc(truncate(c.pins[inPin - 1]?.label || `IN ${p + 1}`, 10))}</text>
+        <g transform="translate(0 ${inMid})">${anchor(inPin, 'left')}</g>
+        <rect class="ow-hit ow-pin-hit" x="-16" y="0" width="${W / 2 + 16}" height="${M * ROW_H}"/>
+      </g>
+      ${outs}
+    </g>`);
+  }
+  return `<g class="ow-conn ow-splitter ow-manifold" data-conn-id="${id}" transform="translate(${r1(c.x)} ${r1(c.y)})">
+    ${selected ? selectionMarkup(L) : ''}
+    <rect class="ow-manifold-body ow-drag" data-conn-head="${id}" x="0" y="0" width="${W}" height="${L.height}" rx="6"/>
+    ${headMarkup(c, L, c.partNumber || (c.poles === 1 && M === 2 ? 'Vacuum tee' : `${c.poles} in, ${c.poles * M} out`))}
+    ${groups.join('')}
+    ${photoMarkup(c, L)}
+  </g>`;
+}
+
+export function splitterMarkup(c, L, options) {
+  if (isManifold(c)) return manifoldMarkup(c, L, options);
+  const { used, selected } = options;
   const id = esc(c.id);
   const W = L.width;
   const M = c.outputs;
@@ -491,8 +594,35 @@ function flatEnd(point, code) {
 }
 
 // `ends` is { a, b } with absolute points and their directions.
+// A lighter color, for the bore of a hose.
+function tint(hex, t) {
+  const n = Number.parseInt((hex || '#8c9196').slice(1), 16);
+  const mix = (c) => Math.round(c + (255 - c) * t);
+  return `rgb(${mix(n >> 16)}, ${mix((n >> 8) & 255)}, ${mix(n & 255)})`;
+}
+
+// A hose clamp near the end of a vacuum line.
+function hoseClamp(point, width) {
+  return `<g transform="translate(${r1(point.x)} ${r1(point.y)}) rotate(${r1(angleOf(point.dir))})">
+    <rect class="ow-clamp" x="15" y="${r1(-width / 2 - 2.2)}" width="4.5" height="${r1(width + 4.4)}" rx="1.2"/>
+  </g>`;
+}
+
 export function wireMarkup(w, g, ends, selected) {
   const hit = `<path class="ow-hit ow-wire-hit" d="${g.d}"/>`;
+  if (isTube(w)) {
+    // The hose is wider for a larger outer diameter. The light line is the bore.
+    const width = clamp((w.tubeOuter || 7) * 1.1, 5, 13);
+    const bore = clamp(width * ((w.tubeInner || 4) / (w.tubeOuter || 7)), 1.2, width - 2);
+    const hex = colorInfo(w.color)?.hex || '#202326';
+    return `<g class="ow-wire ow-tube" data-wire="${esc(w.id)}">
+      ${selected ? `<path class="ow-sel" d="${g.d}" stroke-width="${r1(width + 10)}"/>` : ''}
+      <path class="ow-tube-edge" d="${g.d}" stroke-width="${r1(width + 1.8)}"/>
+      <path class="ow-tube-core" d="${g.d}" stroke="${hex}" stroke-width="${r1(width)}"/>
+      <path class="ow-tube-bore" d="${g.d}" stroke="${tint(hex, w.color === 'BK' ? 0.28 : 0.5)}" stroke-width="${r1(bore)}"/>
+      ${hoseClamp(ends.a, width)}${hoseClamp(ends.b, width)}${hit}
+    </g>`;
+  }
   if (isUsb(w)) {
     return `<g class="ow-wire ow-usb" data-wire="${esc(w.id)}">
       ${selected ? `<path class="ow-sel" d="${g.d}" stroke-width="16"/>` : ''}
