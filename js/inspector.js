@@ -198,7 +198,8 @@ export function createInspector(root, store) {
       ${renderBackground()}
       <h3 class="section-title">Summary</h3>
       <dl class="outputs" data-outputs></dl>
-      <p class="props-hint">To add a wire, drag from one pin to a different pin. Or select one pin, then select the other pin.</p>`;
+      <p class="props-hint">To add a wire, drag from one pin to a different pin. Or select one pin, then select the other pin.</p>
+      <div class="props-actions paste-only"><button type="button" class="button paste-action" data-cmd="paste">Paste copied components</button></div>`;
   }
 
   function renderBackground() {
@@ -343,6 +344,8 @@ export function createInspector(root, store) {
       <p class="props-hint">Drag one of them to move all of them. The arrow keys move them by 10, or by 50 with Shift.
         Shift-click a component to add it to the selection or to remove it.</p>
       <div class="props-actions">
+        <button type="button" class="button" data-cmd="copy">Copy all</button>
+        <button type="button" class="button paste-action" data-cmd="paste">Paste</button>
         <button type="button" class="button" data-cmd="duplicate">Duplicate all</button>
         <button type="button" class="button danger" data-cmd="delete">Delete all</button>
       </div>`;
@@ -379,6 +382,8 @@ export function createInspector(root, store) {
       </div>
       <p class="field-help">The BOM counts one contact for each pin that has a wire.</p>
       <div class="props-actions">
+        <button type="button" class="button" data-cmd="copy">Copy</button>
+        <button type="button" class="button paste-action" data-cmd="paste">Paste</button>
         <button type="button" class="button" data-cmd="duplicate">Duplicate</button>
         <button type="button" class="button danger" data-cmd="delete">Delete connector</button>
       </div>`;
@@ -447,6 +452,8 @@ export function createInspector(root, store) {
       <h3 class="section-title">Outputs</h3>
       ${outputs}
       <div class="props-actions">
+        <button type="button" class="button" data-cmd="copy">Copy</button>
+        <button type="button" class="button paste-action" data-cmd="paste">Paste</button>
         <button type="button" class="button" data-cmd="duplicate">Duplicate</button>
         <button type="button" class="button danger" data-cmd="delete">Delete splitter</button>
       </div>`;

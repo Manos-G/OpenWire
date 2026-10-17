@@ -6,4 +6,5 @@
 // 0.6 select several components, DC barrel plugs, schematics, ZIP project files.
 // 0.7 vacuum lines, hose barbs, push-in fittings and vacuum tees.
 // 0.8 mini vacuum pumps, suction cups, clear see-through tubes, thin tube sizes.
-export const VERSION = '0.8.0';
+// 0.9 copy, cut and paste components (Ctrl+C, Ctrl+X, Ctrl+V).
+export const VERSION = '0.9.0';

@@ -642,6 +642,88 @@ export function duplicateConnector(project, connectorId) {
   return copy;
 }
 
+// ---------- Copy and paste ----------
+// A copy holds the components, the wires between them (both ends in the copy)
+// and the photos of the components. It is JSON text, so you can paste it in a
+// different tab or a different project.
+
+export const CLIP_FORMAT = 'openwire-clip';
+
+export function copyComponents(project, ids) {
+  const set = new Set(ids);
+  const connectors = project.connectors.filter((c) => set.has(c.id)).map((c) => structuredClone(c));
+  const wires = project.wires
+    .filter((w) => set.has(w.from.connector) && set.has(w.to.connector))
+    .map((w) => structuredClone(w));
+  const images = {};
+  for (const c of connectors) {
+    if (c.image && project.images?.[c.image]) images[c.image] = project.images[c.image];
+  }
+  return { format: CLIP_FORMAT, version: FORMAT_VERSION, connectors, wires, images };
+}
+
+export function parseClip(text) {
+  try {
+    const raw = typeof text === 'string' ? JSON.parse(text) : text;
+    return raw && raw.format === CLIP_FORMAT && Array.isArray(raw.connectors) && raw.connectors.length ? raw : null;
+  } catch {
+    return null;
+  }
+}
+
+// Adds the copied items to the project, moved by (dx, dy). The items get new
+// ids and the next free names (X4, W12 and so on). Returns the new component ids.
+export function pasteComponents(project, clip, { dx = 0, dy = 0 } = {}) {
+  // The copy can come from outside OpenWire, so it is checked like a file.
+  const clean = normalizeProject({
+    format: FORMAT,
+    version: FORMAT_VERSION,
+    connectors: clip.connectors,
+    wires: clip.wires || [],
+    images: clip.images || {},
+  });
+  const idMap = new Map();
+  const imageMap = new Map();
+  const added = [];
+  for (const c of clean.connectors) {
+    let image = '';
+    const img = clean.images[c.image];
+    if (img) {
+      if (!imageMap.has(c.image)) {
+        const same = project.images[c.image]?.data === img.data;
+        imageMap.set(c.image, same ? c.image : addImage(project, img));
+      }
+      image = imageMap.get(c.image);
+    }
+    const copy = {
+      ...c,
+      id: newId('c'),
+      ref: nextRef(project.connectors, refPrefix(c)),
+      x: c.x + dx,
+      y: c.y + dy,
+      image,
+    };
+    idMap.set(c.id, copy.id);
+    project.connectors.push(copy);
+    added.push(copy.id);
+  }
+  let wireCount = 0;
+  for (const w of clean.wires) {
+    const from = idMap.get(w.from.connector);
+    const to = idMap.get(w.to.connector);
+    if (!from || !to) continue;
+    project.wires.push({
+      ...w,
+      id: newId('w'),
+      ref: nextRef(project.wires, 'W'),
+      from: { connector: from, pin: w.from.pin },
+      to: { connector: to, pin: w.to.pin },
+    });
+    wireCount += 1;
+  }
+  return { ids: added, wires: wireCount };
+}
+
 export function endLabel(project, end) {
   const connector = findConnector(project, end.connector);
   return connector ? `${connector.ref}:${end.pin}` : '?';

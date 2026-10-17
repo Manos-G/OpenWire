@@ -6,7 +6,7 @@ OpenWire is a free, open-source tool to draw wire harnesses. It operates in your
 
 > **NOTE:** This link operates after you publish the site. Refer to [Publish OpenWire on GitHub Pages](#publish-openwire-on-github-pages).
 
-The version number is in the top right corner of the page. This README is for version 0.8.0.
+The version number is in the top right corner of the page. This README is for version 0.9.0.
 
 ## What OpenWire does
 
@@ -28,6 +28,7 @@ The version number is in the top right corner of the page. This README is for ve
 - Find problems in the **Checks** tab, for example a wire without a length.
 - Undo and redo all changes.
 - Select several components and move them together.
+- Copy, cut and paste components with Ctrl+C, Ctrl+X and Ctrl+V, also between two projects.
 - Keep schematics (PDF files, pictures, KiCad files) with the project, in the **Schematics** tab.
 - Save the project as one ZIP file on your computer, with the schematics inside. Open the file again at a later time.
 - Export the drawing as an SVG file. The SVG file also contains the project, so OpenWire can open it again.
@@ -259,6 +260,22 @@ The **Checks** tab shows errors, warnings and notes. The number on the tab shows
 
 Drag one of the selected components to move all of them. The arrow keys move them by 10, or by 50 with Shift. **Duplicate all** and **Delete all** are in the **Properties** tab. All the changes make one undo step.
 
+### Copy and paste components
+
+1. Select one or more components. Refer to [Select several components](#select-several-components).
+2. Push Ctrl+C (⌘C on a Mac) to copy them, or Ctrl+X (⌘X) to cut them.
+3. Push Ctrl+V (⌘V) to paste them.
+
+- OpenWire copies the components, their pins, their photos and the wires between them. A wire that goes to a component that you did not copy is not copied.
+- The pasted components get the next free names, for example X4 and W12.
+- Each paste moves the copy a small distance, so that the copies do not cover each other. After a cut, the first paste puts the components back in the same place.
+- To paste in a different project or in a different browser tab, copy in one tab and paste in the other tab.
+- On a touch screen, use the **Copy** and **Paste** buttons in the **Properties** tab.
+- If the clipboard has a picture, Ctrl+V adds it as the photo of the selected connector, or as the background picture.
+- When you type in a field, Ctrl+C and Ctrl+V copy and paste text as usual.
+
+One undo removes one paste.
+
 ### Keep schematics with the project
 
 1. Click the **Schematics** tab.
@@ -314,6 +331,9 @@ OpenWire keeps your theme in this browser. The theme is not in the project file.
 | Open | Ctrl+O | ⌘O |
 | Undo | Ctrl+Z | ⌘Z |
 | Redo | Ctrl+Shift+Z or Ctrl+Y | ⇧⌘Z or ⌘Y |
+| Copy the selected components | Ctrl+C | ⌘C |
+| Cut the selected components | Ctrl+X | ⌘X |
+| Paste | Ctrl+V | ⌘V |
 | Duplicate the selected components | Ctrl+D | ⌘D |
 | Select all the components | Ctrl+A | ⌘A |
 | Add a component to the selection | Shift+click | ⇧ click |

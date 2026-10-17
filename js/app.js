@@ -11,6 +11,9 @@ import {
   makeSplitter,
   makePump,
   makeCup,
+  copyComponents,
+  parseClip,
+  pasteComponents,
   cleanCrop,
   componentSelection,
   selectedComponentIds,
@@ -43,6 +46,7 @@ import { BACKGROUND_MAX_SIZE, PHOTO_MAX_SIZE, isImageFile, loadPicture, pickImag
 import { openCropDialog } from './crop.js';
 import { createSchematics } from './schematics.js';
 import { VERSION } from './version.js';
+import { layoutComponent } from './layout.js';
 import { buildThemeMenu, setTheme, themeName } from './themes.js';
 
 const EXAMPLE_URL = 'examples/tail-lamp-harness.openwire.json';
@@ -353,6 +357,162 @@ function duplicateSelection() {
   store.select(componentSelection(copies));
 }
 
+// ---------- Copy and paste ----------
+// Ctrl+C and Ctrl+X put the selected components (with the wires between them
+// and their photos) in the clipboard as JSON text. Ctrl+V pastes them. OpenWire
+// also keeps the last copy itself, for the Copy and Paste buttons.
+
+let clip = null;
+let pasteCount = 0;
+
+function setClip(next) {
+  clip = next;
+  pasteCount = 0;
+  document.documentElement.classList.toggle('has-clip', Boolean(clip));
+}
+
+// Returns the copy as text, or null when nothing can be copied.
+function copySelection({ quiet = false } = {}) {
+  const ids = selectedComponentIds(store.selection);
+  if (!ids.length) {
+    if (!quiet) {
+      toast(
+        store.selection?.type === 'wire'
+          ? 'To copy a wire, select the components at its two ends. Their wires are copied with them.'
+          : 'Select one or more components to copy.',
+      );
+    }
+    return null;
+  }
+  const next = copyComponents(store.project, ids);
+  setClip(next);
+  return JSON.stringify(next);
+}
+
+function copiedMessage(c, verb) {
+  const n = c.connectors.length;
+  const w = c.wires.length;
+  return `${verb} ${n} ${n === 1 ? 'component' : 'components'}${w ? ` and ${w} ${w === 1 ? 'wire' : 'wires'}` : ''}.`;
+}
+
+function clipBounds(c) {
+  let x0 = Infinity;
+  let y0 = Infinity;
+  let x1 = -Infinity;
+  let y1 = -Infinity;
+  for (const comp of c.connectors) {
+    const L = layoutComponent(comp, null);
+    x0 = Math.min(x0, comp.x);
+    y0 = Math.min(y0, comp.y);
+    x1 = Math.max(x1, comp.x + L.width);
+    y1 = Math.max(y1, comp.y + L.height);
+  }
+  return { x: x0, y: y0, w: x1 - x0, h: y1 - y0 };
+}
+
+function pasteClip(source) {
+  const data = parseClip(source);
+  if (!data) {
+    toast('Nothing to paste. Select components and push Ctrl+C first.');
+    return;
+  }
+  // Each new paste of the same copy moves 40 more, so the copies do not cover
+  // each other. When the place is not in view, the copy goes to the middle of the view.
+  pasteCount += 1;
+  const b = clipBounds(data);
+  const view = canvas.visibleRect();
+  let dx = 40 * pasteCount;
+  let dy = 40 * pasteCount;
+  const inView = b.x + dx < view.x + view.width && b.x + dx + b.w > view.x && b.y + dy < view.y + view.height && b.y + dy + b.h > view.y;
+  if (!inView) {
+    dx = Math.round((view.x + view.width / 2 - (b.x + b.w / 2)) / 10) * 10;
+    dy = Math.round((view.y + view.height / 2 - (b.y + b.h / 2)) / 10) * 10;
+  }
+  let result = null;
+  store.update(
+    (project) => {
+      result = pasteComponents(project, data, { dx, dy });
+    },
+    { source: 'app', structural: true },
+  );
+  if (!result?.ids.length) return;
+  store.select(componentSelection(result.ids));
+  showTab('properties');
+  toast(copiedMessage({ connectors: result.ids, wires: { length: result.wires } }, 'Pasted'));
+}
+
+// For the Copy and Paste buttons. The browser can ask for permission to use the clipboard.
+function copyCommand() {
+  const text = copySelection();
+  if (!text) return;
+  navigator.clipboard?.writeText(text).catch(() => {});
+  toast(`${copiedMessage(clip, 'Copied')} Push Ctrl+V or Paste to paste.`);
+}
+
+async function pasteCommand() {
+  if (clip) {
+    pasteClip(clip);
+    return;
+  }
+  try {
+    pasteClip(await navigator.clipboard.readText());
+  } catch {
+    toast('Nothing to paste. Select components and push Ctrl+C first.');
+  }
+}
+
+// Text that you select on the page (for example in a table) is copied as text.
+function hasTextSelection() {
+  const sel = window.getSelection?.();
+  return Boolean(sel && !sel.isCollapsed && sel.toString().trim());
+}
+
+document.addEventListener('copy', (e) => {
+  if (isEditable(e.target) || hasTextSelection()) return;
+  const text = copySelection();
+  if (!text) return;
+  e.preventDefault();
+  e.clipboardData.setData('text/plain', text);
+  toast(copiedMessage(clip, 'Copied'));
+});
+
+document.addEventListener('cut', (e) => {
+  if (isEditable(e.target) || hasTextSelection()) return;
+  const text = copySelection();
+  if (!text) return;
+  e.preventDefault();
+  e.clipboardData.setData('text/plain', text);
+  const message = copiedMessage(clip, 'Cut');
+  // Cut removes the components. Paste puts them back in the same place.
+  pasteCount = -1;
+  deleteSelection({ quiet: true });
+  toast(`${message} Push Ctrl+V to paste.`);
+});
+
+document.addEventListener('paste', (e) => {
+  if (isEditable(e.target)) return;
+  const data = e.clipboardData;
+  // A picture in the clipboard becomes the photo of the selected connector, or the background.
+  const file = [...(data?.files || [])].find((f) => isImageFile(f));
+  if (file) {
+    e.preventDefault();
+    dropPicture(file);
+    return;
+  }
+  const text = data?.getData('text/plain') || '';
+  const fromClipboard = parseClip(text);
+  if (fromClipboard || clip) {
+    e.preventDefault();
+    // A copy from a different tab or project is in the clipboard text.
+    if (fromClipboard && JSON.stringify(fromClipboard) !== JSON.stringify(clip)) {
+      clip = fromClipboard;
+      pasteCount = 0;
+      document.documentElement.classList.add('has-clip');
+    }
+    pasteClip(clip);
+  }
+});
+
 // Moves the selected components with the arrow keys. Each run of key presses is one undo step.
 function nudgeSelection(dx, dy) {
   const ids = selectedComponentIds(store.selection);
@@ -386,7 +546,7 @@ function toggleSelectMode() {
   toast(on ? 'Select mode is on. Tap components, or drag a box around them.' : 'Select mode is off.');
 }
 
-function deleteSelection() {
+function deleteSelection({ quiet = false } = {}) {
   const sel = store.selection;
   if (!sel) return;
   const project = store.project;
@@ -399,7 +559,7 @@ function deleteSelection() {
       },
       { source: 'app', structural: true },
     );
-    toast(`Deleted ${ids.size} components${count ? ` and ${count} ${count === 1 ? 'wire' : 'wires'}` : ''}. Undo brings them back.`);
+    if (!quiet) toast(`Deleted ${ids.size} components${count ? ` and ${count} ${count === 1 ? 'wire' : 'wires'}` : ''}. Undo brings them back.`);
     return;
   }
   if (sel.type === 'connector') {
@@ -407,13 +567,13 @@ function deleteSelection() {
     if (!c) return;
     const count = wiresOnConnector(project, c.id).length;
     store.update((p) => removeConnector(p, sel.id), { source: 'app', structural: true });
-    toast(count ? `Deleted ${c.ref} and ${count} ${count === 1 ? 'wire' : 'wires'}. Undo brings them back.` : `Deleted ${c.ref}.`);
+    if (!quiet) toast(count ? `Deleted ${c.ref} and ${count} ${count === 1 ? 'wire' : 'wires'}. Undo brings them back.` : `Deleted ${c.ref}.`);
     return;
   } else if (sel.type === 'wire') {
     const w = findWire(project, sel.id);
     if (!w) return;
     store.update((p) => removeWire(p, sel.id), { source: 'app', structural: true });
-    toast(`Deleted ${w.ref}.`);
+    if (!quiet) toast(`Deleted ${w.ref}.`);
   }
 }
 
@@ -666,7 +826,7 @@ const commands = {
   redo: () => store.redo(),
   'add-connector': addConnector,
   duplicate: duplicateSelection,
-  delete: deleteSelection,
+  delete: () => deleteSelection(),
   'swap-ends': swapEnds,
   'connector-photo': chooseConnectorPhoto,
   'remove-connector-photo': removeConnectorPhoto,
@@ -676,6 +836,8 @@ const commands = {
   'add-tee': () => addSplitter('manifold'),
   'add-pump': () => addPreset(makePump, 'Added a mini vacuum pump. Connect a clear tube to its Vacuum barb.'),
   'add-cup': () => addPreset(makeCup, 'Added a suction cup. Connect a clear tube to its barb.'),
+  copy: copyCommand,
+  paste: pasteCommand,
   'select-mode': toggleSelectMode,
   'select-all': selectAll,
   'photo-turn': turnPicture,

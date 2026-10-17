@@ -1637,3 +1637,19 @@ p {
   margin-top: 4px;
   font-size: 14px;
 }
+
+/* ---------- Copy and paste ---------- */
+
+/* The Paste buttons show only when OpenWire has a copy. */
+.paste-action,
+.paste-only {
+  display: none !important;
+}
+
+.has-clip .paste-action {
+  display: inline-flex !important;
+}
+
+.has-clip .paste-only {
+  display: flex !important;
+}
