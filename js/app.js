@@ -489,8 +489,35 @@ document.addEventListener('cut', (e) => {
   toast(`${message} Push Ctrl+V to paste.`);
 });
 
+// OpenWire pastes only after Ctrl+V or ⌘V. On Linux, a middle click also sends
+// a paste event (it pastes the selected text). The middle button moves the
+// drawing, so OpenWire ignores those paste events.
+let pasteKeyTime = -Infinity;
+const PASTE_KEY_WINDOW = 1500; // ms
+
+document.addEventListener(
+  'keydown',
+  (e) => {
+    if ((isMac ? e.metaKey : e.ctrlKey) && !e.altKey && e.key.toLowerCase() === 'v') pasteKeyTime = performance.now();
+  },
+  true,
+);
+
+// Stop the middle-click paste of the browser on the drawing.
+for (const type of ['mouseup', 'auxclick']) {
+  canvasWrap.addEventListener(type, (e) => {
+    if (e.button === 1) e.preventDefault();
+  });
+}
+
 document.addEventListener('paste', (e) => {
   if (isEditable(e.target)) return;
+  if (performance.now() - pasteKeyTime > PASTE_KEY_WINDOW) {
+    // Not from Ctrl+V: for example a middle click. Do not paste.
+    e.preventDefault();
+    return;
+  }
+  pasteKeyTime = -Infinity;
   const data = e.clipboardData;
   // A picture in the clipboard becomes the photo of the selected connector, or the background.
   const file = [...(data?.files || [])].find((f) => isImageFile(f));

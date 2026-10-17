@@ -6,7 +6,7 @@ OpenWire is a free, open-source tool to draw wire harnesses. It operates in your
 
 > **NOTE:** This link operates after you publish the site. Refer to [Publish OpenWire on GitHub Pages](#publish-openwire-on-github-pages).
 
-The version number is in the top right corner of the page. This README is for version 0.9.0.
+The version number is in the top right corner of the page. This README is for version 0.9.1.
 
 ## What OpenWire does
 
@@ -273,6 +273,7 @@ Drag one of the selected components to move all of them. The arrow keys move the
 - On a touch screen, use the **Copy** and **Paste** buttons in the **Properties** tab.
 - If the clipboard has a picture, Ctrl+V adds it as the photo of the selected connector, or as the background picture.
 - When you type in a field, Ctrl+C and Ctrl+V copy and paste text as usual.
+- OpenWire pastes only when you push Ctrl+V (⌘V). A middle click does not paste. The middle mouse button moves the drawing.
 
 One undo removes one paste.
 

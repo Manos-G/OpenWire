@@ -7,4 +7,5 @@
 // 0.7 vacuum lines, hose barbs, push-in fittings and vacuum tees.
 // 0.8 mini vacuum pumps, suction cups, clear see-through tubes, thin tube sizes.
 // 0.9 copy, cut and paste components (Ctrl+C, Ctrl+X, Ctrl+V).
-export const VERSION = '0.9.0';
+// 0.9.1 a middle click does not paste.
+export const VERSION = '0.9.1';
